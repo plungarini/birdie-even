@@ -14,7 +14,15 @@
 		},
 		{
 			"desc": "Captures ambient sound to identify nearby bird species.",
-			"name": "microphone"
+			"name": "g2-microphone"
+		},
+		{
+			"desc": "Captures ambient sound to identify nearby bird species.",
+			"name": "phone-microphone"
+		},
+		{
+			"desc": "Gets location for better bird identification.",
+			"name": "location"
 		}
 	],
 	"supported_languages": ["en"],
