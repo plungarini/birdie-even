@@ -15,21 +15,23 @@ function requireNumber(key: string): number {
   return n;
 }
 
+const MIN_CHUNK_DURATION_MS = 4000;
+const MAX_CHUNK_DURATION_MS = 60000;
+
 const workerUrl = requireEnv('VITE_WORKER_URL');
-const minChunkDurationMs = requireNumber('VITE_MIN_CHUNK_DURATION_MS');
-const maxChunkDurationMs = requireNumber('VITE_MAX_CHUNK_DURATION_MS');
 const chunkDurationMs = requireNumber('VITE_CHUNK_DURATION_MS');
 const minConfidence = requireNumber('VITE_MIN_CONFIDENCE');
+const normalizedWorkerUrl = workerUrl.replace(/\/+$/, '');
+const useLocalAnalyzeProxy = import.meta.env.DEV;
+const analyzeUrl = useLocalAnalyzeProxy ? '/analyze' : `${normalizedWorkerUrl}/analyze`;
+const connectionLabel = useLocalAnalyzeProxy ? 'Local dev proxy (/analyze)' : normalizedWorkerUrl;
+const connectionHint = useLocalAnalyzeProxy
+  ? 'Vite forwards this same-origin request to Wrangler on port 3001 during local development.'
+  : 'Update .env and rebuild to point Birdie at another worker.';
 
-if (minChunkDurationMs < 4000) {
-  throw new Error(`[birdie] VITE_MIN_CHUNK_DURATION_MS must be >= 4000 (BirdNET floor), got ${minChunkDurationMs}`);
-}
-if (maxChunkDurationMs > 60000) {
-  throw new Error(`[birdie] VITE_MAX_CHUNK_DURATION_MS must be <= 60000, got ${maxChunkDurationMs}`);
-}
-if (chunkDurationMs < minChunkDurationMs || chunkDurationMs > maxChunkDurationMs) {
+if (chunkDurationMs < MIN_CHUNK_DURATION_MS || chunkDurationMs > MAX_CHUNK_DURATION_MS) {
   throw new Error(
-    `[birdie] VITE_CHUNK_DURATION_MS (${chunkDurationMs}) must be in [${minChunkDurationMs}, ${maxChunkDurationMs}]`,
+    `[birdie] VITE_CHUNK_DURATION_MS (${chunkDurationMs}) must be in [${MIN_CHUNK_DURATION_MS}, ${MAX_CHUNK_DURATION_MS}]`,
   );
 }
 if (minConfidence < 0 || minConfidence > 1) {
@@ -37,10 +39,14 @@ if (minConfidence < 0 || minConfidence > 1) {
 }
 
 export const config = Object.freeze({
-  workerUrl,
+  workerUrl: normalizedWorkerUrl,
+  analyzeUrl,
+  useLocalAnalyzeProxy,
+  connectionLabel,
+  connectionHint,
   chunkDurationMs,
-  minChunkDurationMs,
-  maxChunkDurationMs,
+  minChunkDurationMs: MIN_CHUNK_DURATION_MS,
+  maxChunkDurationMs: MAX_CHUNK_DURATION_MS,
   minConfidence,
   // G2 mic hardware constants — not configurable
   sampleRate: 16000 as const,

@@ -6,6 +6,18 @@ import { buildWav } from './wav';
 type FlushCallback = (wav: Blob) => void;
 type AudioChunkCallback = (size: number) => void;
 type CaptureStateCallback = (event: 'started' | 'stopped' | 'capture-error' | 'flushed', details?: unknown) => void;
+type WaveformCallback = (peak: number) => void;
+
+type AudioEventShape = {
+  data?: Uint8Array | number[];
+  pcm?: Uint8Array | number[];
+  audioPcm?: Uint8Array | number[];
+  jsonData?: {
+    audioPcm?: Uint8Array | number[];
+    data?: Uint8Array | number[];
+    pcm?: Uint8Array | number[];
+  };
+};
 
 let bridge: EvenAppBridge | null = null;
 let active = false;
@@ -13,7 +25,51 @@ let flushTimer: ReturnType<typeof setInterval> | null = null;
 let onFlush: FlushCallback | null = null;
 let onAudioChunk: AudioChunkCallback | null = null;
 let onCaptureState: CaptureStateCallback | null = null;
+let onWaveformPeak: WaveformCallback | null = null;
 let firstAudioEventLogged = false;
+let pendingWaveformPeak = 0;
+let lastWaveformEmitAt = 0;
+
+const WAVEFORM_EMIT_INTERVAL_MS = 84;
+
+function toUint8Array(value: unknown): Uint8Array | null {
+  if (value instanceof Uint8Array) return value;
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item))
+      .map((item) => Math.max(0, Math.min(255, item)));
+    return normalized.length > 0 ? Uint8Array.from(normalized) : null;
+  }
+  return null;
+}
+
+function extractChunk(audioEvent: AudioEventShape | undefined): Uint8Array | null {
+  if (!audioEvent) return null;
+  return (
+    toUint8Array(audioEvent.data) ??
+    toUint8Array(audioEvent.pcm) ??
+    toUint8Array(audioEvent.audioPcm) ??
+    toUint8Array(audioEvent.jsonData?.data) ??
+    toUint8Array(audioEvent.jsonData?.pcm) ??
+    toUint8Array(audioEvent.jsonData?.audioPcm)
+  );
+}
+
+function computeChunkPeak(chunk: Uint8Array): number {
+  if (chunk.byteLength < 2) return 0;
+
+  let peak = 0;
+  const step = 4;
+  for (let i = 0; i < chunk.byteLength - 1; i += step) {
+    let sample = chunk[i] | (chunk[i + 1] << 8);
+    if (sample & 0x8000) sample -= 0x10000;
+    const normalized = Math.abs(sample) / 32768;
+    if (normalized > peak) peak = normalized;
+  }
+
+  return Math.min(1, Math.sqrt(peak));
+}
 
 export function initCapture(
   b: EvenAppBridge,
@@ -21,30 +77,42 @@ export function initCapture(
   hooks?: {
     onAudioChunk?: AudioChunkCallback;
     onCaptureState?: CaptureStateCallback;
+    onWaveformPeak?: WaveformCallback;
   },
 ): void {
   bridge = b;
   onFlush = flushCb;
   onAudioChunk = hooks?.onAudioChunk ?? null;
   onCaptureState = hooks?.onCaptureState ?? null;
+  onWaveformPeak = hooks?.onWaveformPeak ?? null;
 
   b.onEvenHubEvent((event) => {
     // Log the first raw audio event once to confirm field layout at runtime.
     if (!firstAudioEventLogged && (event as { audioEvent?: unknown }).audioEvent !== undefined) {
-      console.log('[capture] first audioEvent shape:', JSON.stringify(Object.keys((event as { audioEvent: Record<string, unknown> }).audioEvent)));
+      console.log(
+        '[capture] first audioEvent shape:',
+        JSON.stringify(Object.keys((event as { audioEvent: Record<string, unknown> }).audioEvent)),
+      );
       firstAudioEventLogged = true;
     }
 
     if (!active) return;
 
-    const audioEvent = (event as { audioEvent?: { data?: Uint8Array; pcm?: Uint8Array } }).audioEvent;
+    const audioEvent = (event as { audioEvent?: AudioEventShape }).audioEvent;
     if (!audioEvent) return;
 
-    // Accommodate both field names (data vs pcm) until confirmed at runtime.
-    const chunk = audioEvent.data ?? audioEvent.pcm;
-    if (chunk instanceof Uint8Array && chunk.byteLength > 0) {
+    const chunk = extractChunk(audioEvent);
+    if (chunk && chunk.byteLength > 0) {
       pcmBuffer.push(chunk);
       onAudioChunk?.(chunk.byteLength);
+
+      const now = Date.now();
+      pendingWaveformPeak = Math.max(pendingWaveformPeak, computeChunkPeak(chunk));
+      if (now - lastWaveformEmitAt >= WAVEFORM_EMIT_INTERVAL_MS) {
+        onWaveformPeak?.(pendingWaveformPeak);
+        pendingWaveformPeak = 0;
+        lastWaveformEmitAt = now;
+      }
     }
   });
 }
@@ -52,6 +120,8 @@ export function initCapture(
 export async function startCapture(): Promise<void> {
   if (!bridge || active) return;
   active = true;
+  pendingWaveformPeak = 0;
+  lastWaveformEmitAt = 0;
   pcmBuffer.clear();
 
   try {
@@ -81,6 +151,8 @@ export async function stopCapture(): Promise<void> {
     return;
   }
   active = false;
+  pendingWaveformPeak = 0;
+  lastWaveformEmitAt = 0;
 
   if (flushTimer !== null) {
     clearInterval(flushTimer);

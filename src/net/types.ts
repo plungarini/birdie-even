@@ -16,6 +16,7 @@ export class AnalyzeError extends Error {
   constructor(
     message: string,
     public readonly status?: number,
+    public readonly phase?: 'fetch' | 'http' | 'invalid-json' | 'worker-error',
   ) {
     super(message);
     this.name = 'AnalyzeError';

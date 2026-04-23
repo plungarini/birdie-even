@@ -1,6 +1,8 @@
 import type { BirdieHudState } from './hud/types';
 import type { Detection } from './net/types';
 
+const WAVEFORM_HISTORY_LENGTH = 56;
+
 export interface BirdieDiagnostics {
   lastCaptureStartedAt: number | null;
   lastAudioPacketAt: number | null;
@@ -13,10 +15,12 @@ export interface BirdieDiagnostics {
 export interface BirdieStoreState {
   hudStateType: BirdieHudState['type'];
   isListening: boolean;
+  isCaptureActive: boolean;
   lastDetections: Detection[];
   lastDetectionsUpdatedAt: number | null;
   lastError: string | null;
   lastRawResponse: unknown;
+  waveformPeaks: number[];
   diagnostics: BirdieDiagnostics;
 }
 
@@ -25,10 +29,12 @@ type Listener = () => void;
 const initialState: BirdieStoreState = {
   hudStateType: 'IDLE',
   isListening: false,
+  isCaptureActive: false,
   lastDetections: [],
   lastDetectionsUpdatedAt: null,
   lastError: null,
   lastRawResponse: null,
+  waveformPeaks: Array.from({ length: WAVEFORM_HISTORY_LENGTH }, () => 0),
   diagnostics: {
     lastCaptureStartedAt: null,
     lastAudioPacketAt: null,
@@ -61,6 +67,11 @@ export const birdieStore = {
       hudState.type === 'DETECTED' ||
       hudState.type === 'NO_DETECTION';
     state = { ...state, hudStateType: hudState.type, isListening };
+    notify();
+  },
+
+  setCaptureActive: (isCaptureActive: boolean) => {
+    state = { ...state, isCaptureActive };
     notify();
   },
 
@@ -100,6 +111,23 @@ export const birdieStore = {
         ...state.diagnostics,
         ...patch,
       },
+    };
+    notify();
+  },
+
+  pushWaveformPeak: (peak: number) => {
+    const clamped = Math.max(0, Math.min(1, peak));
+    state = {
+      ...state,
+      waveformPeaks: [...state.waveformPeaks.slice(-(WAVEFORM_HISTORY_LENGTH - 1)), clamped],
+    };
+    notify();
+  },
+
+  resetWaveform: () => {
+    state = {
+      ...state,
+      waveformPeaks: Array.from({ length: WAVEFORM_HISTORY_LENGTH }, () => 0),
     };
     notify();
   },

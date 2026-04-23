@@ -15,3 +15,11 @@ dist/
 Thumbs.db
 # Logs
 *.log
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+# Birdnet
+data/
+data_path.txt

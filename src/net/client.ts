@@ -12,7 +12,7 @@ export async function analyze(wavBlob: Blob): Promise<Detection[]> {
 
   let res: Response;
   try {
-    res = await fetch(`${config.workerUrl}/analyze`, {
+    res = await fetch(config.analyzeUrl, {
       method: 'POST',
       body: form,
       signal: controller.signal,
@@ -24,7 +24,11 @@ export async function analyze(wavBlob: Blob): Promise<Detection[]> {
         : err instanceof Error
           ? err.message
           : String(err);
-    throw new AnalyzeError(`fetch failed: ${msg}`);
+    throw new AnalyzeError(
+      `fetch to ${config.analyzeUrl} failed: ${msg}. Check the local server, Vite proxy, network access, or CORS.`,
+      undefined,
+      'fetch',
+    );
   } finally {
     clearTimeout(timer);
   }
@@ -45,18 +49,18 @@ export async function analyze(wavBlob: Blob): Promise<Detection[]> {
         // ignore
       }
     }
-    throw new AnalyzeError(message, res.status);
+    throw new AnalyzeError(message, res.status, 'http');
   }
 
   let body: AnalyzeResponse;
   try {
     body = (await res.json()) as AnalyzeResponse;
   } catch {
-    throw new AnalyzeError('invalid JSON from worker');
+    throw new AnalyzeError('invalid JSON from worker', res.status, 'invalid-json');
   }
 
   if (body.error) {
-    throw new AnalyzeError(body.error, res.status);
+    throw new AnalyzeError(body.error, res.status, 'worker-error');
   }
 
   const detections = Array.isArray(body.detections) ? body.detections : [];

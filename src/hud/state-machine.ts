@@ -11,6 +11,7 @@ class BirdieStateMachine {
   private state: BirdieHudState = { type: 'IDLE' };
   private readonly listeners = new Set<Listener>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryGeneration = 0;
 
   getState(): BirdieHudState {
     return this.state;
@@ -22,22 +23,43 @@ class BirdieStateMachine {
   }
 
   onForegroundEnter(): void {
+    this.retryGeneration += 1;
     this.transition({ type: 'IDLE' });
   }
 
   onForegroundExit(): void {
+    this.retryGeneration += 1;
+    this.cancelRetry();
+    this.transition({ type: 'IDLE' });
+  }
+
+  forceIdle(): void {
+    this.retryGeneration += 1;
     this.cancelRetry();
     this.transition({ type: 'IDLE' });
   }
 
   onClickEvent(): void {
     const s = this.state;
-    if (s.type === 'IDLE') {
-      this.transition({ type: 'LISTENING' });
+    if (s.type === 'IDLE' || s.type === 'ERROR') {
+      this.startListening();
     } else {
-      this.cancelRetry();
-      this.transition({ type: 'IDLE' });
+      this.stopListening();
     }
+  }
+
+  startListening(): void {
+    if (this.state.type === 'LISTENING') return;
+    this.retryGeneration += 1;
+    this.cancelRetry();
+    this.transition({ type: 'LISTENING' });
+  }
+
+  stopListening(): void {
+    if (this.state.type === 'IDLE') return;
+    this.retryGeneration += 1;
+    this.cancelRetry();
+    this.transition({ type: 'IDLE' });
   }
 
   onAnalysisStart(): void {
@@ -75,15 +97,23 @@ class BirdieStateMachine {
 
   private scheduleRetry(wasListening: boolean): void {
     this.cancelRetry();
+    const generation = ++this.retryGeneration;
     let remaining = ERROR_RETRY_SEC;
 
     const tick = () => {
+      if (generation !== this.retryGeneration) {
+        this.retryTimer = null;
+        return;
+      }
       remaining -= 1;
       if (remaining > 0) {
         this.transition({ type: 'ERROR', message: (this.state as Extract<BirdieHudState, { type: 'ERROR' }>).message, retryCountdown: remaining });
         this.retryTimer = setTimeout(tick, 1000);
       } else {
         this.retryTimer = null;
+        if (generation !== this.retryGeneration) {
+          return;
+        }
         if (wasListening) {
           this.transition({ type: 'LISTENING' });
         } else {
@@ -96,6 +126,7 @@ class BirdieStateMachine {
   }
 
   private cancelRetry(): void {
+    this.retryGeneration += 1;
     if (this.retryTimer !== null) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
