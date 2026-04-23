@@ -2,6 +2,7 @@
 node_modules/
 # Build output
 dist/
+.wrangler
 # Even Hub package files
 *.ehpk
 # Environment variables
