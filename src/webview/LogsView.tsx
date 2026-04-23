@@ -98,6 +98,7 @@ export function LogsPanel() {
   }, []);
 
   const filteredLogs = visibleLogs.filter((l) => filters[l.level as LogLevel] ?? true);
+  const orderedLogs = [...filteredLogs].reverse();
 
   function showToast(message: string) {
     setToast(message);
@@ -197,7 +198,7 @@ export function LogsPanel() {
         ) : (
             <div className="max-h-[320px] overflow-y-auto p-3">
               <div className="flex flex-col gap-2">
-                {filteredLogs.map((l, i) => <LogItem key={i} log={l} />)}
+                {orderedLogs.map((l, i) => <LogItem key={`${l.ts}-${i}`} log={l} />)}
               </div>
             </div>
         )}

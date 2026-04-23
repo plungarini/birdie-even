@@ -52,6 +52,9 @@ export function shouldDisplayDebugLog(entry: Pick<DebugLogEntry, 'level' | 'msg'
 			return false;
 		}
 		return !(
+			msg.startsWith('[birdie] glasses layer starting') ||
+			msg.startsWith('[birdie] bridge acquired') ||
+			msg.startsWith('[birdie] glasses layer ready') ||
 			msg.startsWith('[capture] first audioEvent shape:') ||
 			msg.startsWith('[birdie] state transition') ||
 			msg.startsWith('[birdie] click event accepted') ||
@@ -160,10 +163,12 @@ function deriveMessage(args: unknown[]): string {
 function deriveDetails(args: unknown[]): unknown[] | undefined {
 	if (args.length === 0) return undefined;
 	if (typeof args[0] === 'string') {
-		const details = sanitizeDetails(args.slice(1));
+		const msg = args[0];
+		const details = sanitizeDetails(args.slice(1)).filter((detail) => normalize(detail) !== msg);
 		return details.length > 0 ? details : undefined;
 	}
-	const details = sanitizeDetails(args);
+	const msg = deriveMessage(args);
+	const details = sanitizeDetails(args).filter((detail) => normalize(detail) !== msg);
 	return details.length > 0 ? details : undefined;
 }
 
