@@ -17,6 +17,7 @@ export interface HudTextDescriptor {
   height: number;
   paddingLength?: number;
   borderWidth?: number;
+  borderColor?: number;
   borderRadius?: number;
   isEventCapture?: number;
 }

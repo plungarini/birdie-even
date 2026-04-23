@@ -18,15 +18,34 @@ export async function analyze(wavBlob: Blob): Promise<Detection[]> {
       signal: controller.signal,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg =
+      err instanceof DOMException && err.name === 'AbortError'
+        ? `request timed out after ${TIMEOUT_MS / 1000}s`
+        : err instanceof Error
+          ? err.message
+          : String(err);
     throw new AnalyzeError(`fetch failed: ${msg}`);
   } finally {
     clearTimeout(timer);
   }
 
   if (!res.ok) {
-    // 4xx: don't retry (bad request, auth error, etc.)
-    throw new AnalyzeError(`HTTP ${res.status}`, res.status);
+    let message = `HTTP ${res.status}`;
+    const clone = res.clone();
+    try {
+      const maybeJson = (await clone.json()) as Partial<AnalyzeResponse> & { error?: string };
+      if (maybeJson.error) {
+        message = maybeJson.error;
+      }
+    } catch {
+      try {
+        const text = await res.text();
+        if (text.trim()) message = `${message}: ${text.trim()}`;
+      } catch {
+        // ignore
+      }
+    }
+    throw new AnalyzeError(message, res.status);
   }
 
   let body: AnalyzeResponse;
@@ -37,7 +56,7 @@ export async function analyze(wavBlob: Blob): Promise<Detection[]> {
   }
 
   if (body.error) {
-    throw new AnalyzeError(body.error);
+    throw new AnalyzeError(body.error, res.status);
   }
 
   const detections = Array.isArray(body.detections) ? body.detections : [];

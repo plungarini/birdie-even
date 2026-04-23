@@ -10,7 +10,7 @@ import { HUD_CONTENT_CHAR_LIMIT, HUD_HEIGHT, HUD_WIDTH } from './constants';
 import type { HudLayoutDescriptor, HudRenderState } from './types';
 
 const LAYOUT: HudLayoutDescriptor = {
-  key: 'birdie.v1',
+  key: 'birdie.v2',
   textDescriptors: [
     // Invisible full-screen event capture container.
     {
@@ -24,16 +24,37 @@ const LAYOUT: HudLayoutDescriptor = {
       paddingLength: 0,
       isEventCapture: 1,
     },
-    // Main content container.
     {
       containerID: 1,
-      containerName: 'main',
+      containerName: 'header',
       xPosition: 12,
-      yPosition: 12,
+      yPosition: 0,
       width: HUD_WIDTH - 24,
-      height: HUD_HEIGHT - 24,
-      paddingLength: 12,
+      height: 40,
+      paddingLength: 4,
+      isEventCapture: 0,
+    },
+    {
+      containerID: 2,
+      containerName: 'body',
+      xPosition: 0,
+      yPosition: 38,
+      width: HUD_WIDTH,
+      height: 212,
+      paddingLength: 15,
       borderWidth: 1,
+      borderColor: 13,
+      borderRadius: 12,
+      isEventCapture: 0,
+    },
+    {
+      containerID: 3,
+      containerName: 'footer',
+      xPosition: 12,
+      yPosition: 251,
+      width: HUD_WIDTH - 24,
+      height: 35,
+      paddingLength: 4,
       isEventCapture: 0,
     },
   ],

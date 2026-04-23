@@ -4,16 +4,29 @@ import { pcmBuffer } from './buffer';
 import { buildWav } from './wav';
 
 type FlushCallback = (wav: Blob) => void;
+type AudioChunkCallback = (size: number) => void;
+type CaptureStateCallback = (event: 'started' | 'stopped' | 'capture-error' | 'flushed', details?: unknown) => void;
 
 let bridge: EvenAppBridge | null = null;
 let active = false;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 let onFlush: FlushCallback | null = null;
+let onAudioChunk: AudioChunkCallback | null = null;
+let onCaptureState: CaptureStateCallback | null = null;
 let firstAudioEventLogged = false;
 
-export function initCapture(b: EvenAppBridge, flushCb: FlushCallback): void {
+export function initCapture(
+  b: EvenAppBridge,
+  flushCb: FlushCallback,
+  hooks?: {
+    onAudioChunk?: AudioChunkCallback;
+    onCaptureState?: CaptureStateCallback;
+  },
+): void {
   bridge = b;
   onFlush = flushCb;
+  onAudioChunk = hooks?.onAudioChunk ?? null;
+  onCaptureState = hooks?.onCaptureState ?? null;
 
   b.onEvenHubEvent((event) => {
     // Log the first raw audio event once to confirm field layout at runtime.
@@ -31,6 +44,7 @@ export function initCapture(b: EvenAppBridge, flushCb: FlushCallback): void {
     const chunk = audioEvent.data ?? audioEvent.pcm;
     if (chunk instanceof Uint8Array && chunk.byteLength > 0) {
       pcmBuffer.push(chunk);
+      onAudioChunk?.(chunk.byteLength);
     }
   });
 }
@@ -42,23 +56,30 @@ export async function startCapture(): Promise<void> {
 
   try {
     await (bridge as unknown as { audioControl: (v: boolean) => Promise<void> }).audioControl(true);
+    onCaptureState?.('started');
   } catch (err) {
     console.error('[capture] audioControl(true) failed', err);
     active = false;
-    return;
+    onCaptureState?.('capture-error', err);
+    throw err;
   }
 
   flushTimer = setInterval(() => {
     if (!active || !onFlush) return;
     const pcm = pcmBuffer.flush();
     if (pcm.byteLength === 0) return;
+    onCaptureState?.('flushed', { byteLength: pcm.byteLength });
     const wav = buildWav(pcm, config.sampleRate, config.channels, config.bitDepth);
     onFlush(wav);
   }, config.chunkDurationMs);
 }
 
 export async function stopCapture(): Promise<void> {
-  if (!bridge || !active) return;
+  if (!bridge) return;
+  if (!active && flushTimer === null) {
+    pcmBuffer.clear();
+    return;
+  }
   active = false;
 
   if (flushTimer !== null) {
@@ -69,6 +90,7 @@ export async function stopCapture(): Promise<void> {
 
   try {
     await (bridge as unknown as { audioControl: (v: boolean) => Promise<void> }).audioControl(false);
+    onCaptureState?.('stopped');
   } catch (err) {
     console.error('[capture] audioControl(false) failed', err);
   }

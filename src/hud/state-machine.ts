@@ -67,6 +67,12 @@ class BirdieStateMachine {
     this.scheduleRetry(wasListening);
   }
 
+  onCaptureError(message: string): void {
+    this.cancelRetry();
+    birdieStore.setError(message);
+    this.transition({ type: 'ERROR', message, retryCountdown: 0 });
+  }
+
   private scheduleRetry(wasListening: boolean): void {
     this.cancelRetry();
     let remaining = ERROR_RETRY_SEC;
