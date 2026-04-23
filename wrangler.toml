@@ -1,4 +1,4 @@
-name = "birdie-proxy"
+name = "birdie-even"
 main = "server/index.ts"
 compatibility_date = "2026-04-22"
 compatibility_flags = ["nodejs_compat"]
