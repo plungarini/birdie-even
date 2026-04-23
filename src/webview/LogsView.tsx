@@ -1,5 +1,6 @@
 import { Button, Card, allIcons } from 'even-toolkit/web';
 import React, { useEffect, useRef, useState } from 'react';
+import { useDebugLogs, shouldDisplayDebugLog } from '../debug/logs';
 
 type SvgIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 const IcChecklist = allIcons['edit-checklist'] as SvgIcon;
@@ -33,23 +34,6 @@ function formatDetails(details: unknown[]): string {
     try { return `[Arg ${i + 1}] ${JSON.stringify(d, null, 2)}`; }
     catch { return `[Arg ${i + 1}] ${String(d)}`; }
   }).join('\n\n');
-}
-
-function useDebugLogs(): LogEntry[] {
-  const [logs, setLogs] = useState<LogEntry[]>(() => (window as unknown as GlobalWithLogs).__debugLogs ?? []);
-
-  useEffect(() => {
-    const prev = (window as unknown as GlobalWithLogs).__refreshDebug;
-    (window as unknown as GlobalWithLogs).__refreshDebug = () => {
-      setLogs([...((window as unknown as GlobalWithLogs).__debugLogs ?? [])]);
-      prev?.();
-    };
-    return () => {
-      (window as unknown as GlobalWithLogs).__refreshDebug = prev;
-    };
-  }, []);
-
-  return logs;
 }
 
 function LogItem({ log }: { log: LogEntry }) {
@@ -92,7 +76,7 @@ function LogItem({ log }: { log: LogEntry }) {
 }
 
 export function LogsPanel() {
-  const allLogs = useDebugLogs();
+  const allLogs = useDebugLogs() as LogEntry[];
   const [filters, setFilters] = useState<Record<LogLevel, boolean>>({ log: true, warn: true, error: true });
   const [toast, setToast] = useState('');
   const [isFeedPaused, setIsFeedPaused] = useState(false);
@@ -133,7 +117,8 @@ export function LogsPanel() {
 
   function clearLogs() {
     if (!confirm('Clear all logs?')) return;
-    (window as unknown as GlobalWithLogs).__debugLogs = [];
+    (window as unknown as GlobalWithLogs).__debugLogs =
+      ((window as unknown as GlobalWithLogs).__debugLogs ?? []).filter((entry) => !shouldDisplayDebugLog(entry));
     (window as unknown as GlobalWithLogs).__refreshDebug?.();
   }
 

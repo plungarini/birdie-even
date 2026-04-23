@@ -89,7 +89,6 @@ app.post('/analyze', async (c) => {
 	let json: unknown;
 	try {
 		json = await upstream.json();
-		console.log('[birdie-proxy] json', json);
 	} catch {
 		console.error('[birdie-proxy] upstream returned invalid JSON');
 		return c.json({ detections: [], error: 'upstream returned invalid JSON' }, 502, corsHeaders(origin));
