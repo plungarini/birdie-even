@@ -6,6 +6,7 @@ dist/
 *.ehpk
 # Environment variables
 .env
+.dev.vars
 # IDE
 .vscode/
 # OS

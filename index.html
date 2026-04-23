@@ -8,6 +8,40 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>BirdLens</title>
+    <script>
+      (function () {
+        const MAX_LOGS = 100;
+        let isCapturing = false;
+        globalThis.__debugLogs = globalThis.__debugLogs || [];
+        const formatArg = (v) => {
+          if (v instanceof Error) return { _type: 'Error', name: v.name, message: v.message, stack: v.stack };
+          if (v !== null && typeof v === 'object') { try { return JSON.parse(JSON.stringify(v)); } catch { return String(v); } }
+          return v;
+        };
+        const formatMsg = (args) => {
+          if (!args.length) return '';
+          const a = args[0];
+          if (a instanceof Error) return a.message || a.name || 'Error';
+          if (typeof a === 'object' && a !== null) { try { const s = JSON.stringify(a); return s.length > 120 ? s.slice(0, 120) + '\u2026' : s; } catch { return String(a); } }
+          return String(a);
+        };
+        const capture = (level, args) => {
+          if (isCapturing) return; isCapturing = true;
+          try {
+            const entry = { level, msg: formatMsg(args), ts: Date.now(), details: Array.from(args).map(formatArg) };
+            globalThis.__debugLogs.push(entry);
+            if (globalThis.__debugLogs.length > MAX_LOGS) globalThis.__debugLogs = globalThis.__debugLogs.slice(-MAX_LOGS);
+            if (typeof globalThis.__refreshDebug === 'function') globalThis.__refreshDebug();
+          } finally { isCapturing = false; }
+        };
+        const bl = console.log.bind(console), bw = console.warn.bind(console), be = console.error.bind(console);
+        console.log   = (...a) => { bl(...a);  capture('log',   a); };
+        console.warn  = (...a) => { bw(...a);  capture('warn',  a); };
+        console.error = (...a) => { be(...a);  capture('error', a); };
+        globalThis.addEventListener('error', (e) => capture('error', [`[Uncaught] ${e.message}`, e.error]));
+        globalThis.addEventListener('unhandledrejection', (e) => capture('error', [`[Promise] ${e.reason?.stack || e.reason}`, e.reason]));
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
