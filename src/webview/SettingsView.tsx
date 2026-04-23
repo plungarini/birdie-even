@@ -1,4 +1,4 @@
-import { Badge, Button, Card, SectionHeader } from 'even-toolkit/web';
+import { Badge, Button, Card } from 'even-toolkit/web';
 import { useSyncExternalStore } from 'react';
 import { config } from '../config';
 import { birdieStore } from '../store';
@@ -30,55 +30,72 @@ export function SettingsView() {
   return (
     <div className="birdie-scroll-panel">
       <div className="flex flex-col gap-5 pb-6">
-        <Card padding="default" className="birdie-surface-card">
-          <div className="flex items-start justify-between gap-4">
+        <Card padding="none" className="birdie-surface-card">
+          <div className="birdie-card-body flex flex-col gap-4">
             <div className="min-w-0">
-              <p className="text-detail uppercase tracking-[0.32em] text-text-dim">BirdNET session</p>
+              <p className="birdie-section-kicker">BirdNET session</p>
               <h2 className="mt-2 text-[1.8rem] leading-[1.04] tracking-[-0.04em] text-text">Birdie is tuned for short, repeatable listening passes.</h2>
               <p className="mt-3 text-normal-body text-text-dim">
                 The glasses handle capture locally, then BirdNET scores the latest clip against your configured endpoint.
               </p>
             </div>
-            <Badge variant={connectionVariant} className="birdie-chip">{state.hudStateType.toLowerCase()}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant={connectionVariant} className="birdie-chip">
+                {state.hudStateType.toLowerCase()}
+              </Badge>
+              <span className="text-detail text-text-dim">
+                {state.isCaptureActive ? 'Capture is active on the glasses.' : 'Waiting for the next listening pass.'}
+              </span>
+            </div>
           </div>
         </Card>
 
       <section className="flex flex-col gap-3">
-        <SectionHeader title="BirdNET session" />
+        <p className="birdie-section-title">BirdNET session</p>
         <div className="grid grid-cols-2 gap-3">
-          <Card padding="default" className="birdie-surface-card">
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body">
             <p className="text-detail uppercase tracking-[0.24em] text-text-dim">Capture state</p>
-            <p className="mt-2 text-normal-title text-text">{state.isListening ? 'Listening live' : 'Waiting'}</p>
+            <p className="mt-2 text-normal-title text-text">{state.isCaptureActive ? 'Listening live' : 'Waiting'}</p>
+            </div>
           </Card>
-          <Card padding="default" className="birdie-surface-card">
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body">
             <p className="text-detail uppercase tracking-[0.24em] text-text-dim">Last clip</p>
             <p className="mt-2 text-normal-title text-text">{lastClipLabel}</p>
+            </div>
           </Card>
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionHeader title="Audio capture" />
+        <p className="birdie-section-title">Audio capture</p>
         <div className="grid grid-cols-3 gap-3">
-          <Card padding="default" className="birdie-surface-card">
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body">
             <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Sample rate</p>
             <p className="mt-2 text-normal-title text-text">{config.sampleRate / 1000}kHz</p>
+            </div>
           </Card>
-          <Card padding="default" className="birdie-surface-card">
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body">
             <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Channels</p>
             <p className="mt-2 text-normal-title text-text">{config.channels === 1 ? 'Mono' : String(config.channels)}</p>
+            </div>
           </Card>
-          <Card padding="default" className="birdie-surface-card">
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body">
             <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Bit depth</p>
             <p className="mt-2 text-normal-title text-text">{config.bitDepth}-bit</p>
+            </div>
           </Card>
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionHeader title="Analysis thresholds" />
-        <Card padding="default" className="birdie-surface-card">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <p className="birdie-section-title">Analysis thresholds</p>
+        <Card padding="none" className="birdie-surface-card">
+          <div className="birdie-card-body grid gap-4 sm:grid-cols-2">
             <div className="grid gap-3">
               <div>
                 <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Chunk duration</p>
@@ -107,22 +124,22 @@ export function SettingsView() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionHeader title="Connection" />
-        <Card padding="default" className="birdie-surface-card">
-          <div className="flex flex-col gap-2">
+        <p className="birdie-section-title">Connection</p>
+        <Card padding="none" className="birdie-surface-card">
+          <div className="birdie-card-body flex flex-col gap-2">
             <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Endpoint</p>
-            <p className="text-normal-body font-mono break-all text-text">{config.workerUrl}</p>
+            <p className="text-normal-body font-mono break-all text-text">{config.connectionLabel}</p>
             <p className="text-detail text-text-dim">
-              Update <code>.env</code> and rebuild to point Birdie at another worker.
+              {config.connectionHint}
             </p>
           </div>
         </Card>
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionHeader title="Diagnostics" />
-        <Card padding="default" className="birdie-surface-card">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <p className="birdie-section-title">Diagnostics</p>
+        <Card padding="none" className="birdie-surface-card">
+          <div className="birdie-card-body grid gap-4 sm:grid-cols-2">
             <div>
               <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Last error</p>
               <p className="mt-2 text-normal-body text-text">

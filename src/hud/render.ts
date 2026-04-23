@@ -1,20 +1,9 @@
 import type { Detection } from '../net/types';
 import type { HudRenderState, BirdieHudState } from './types';
 import { LAYOUT } from './session';
+import { alignRow, centerLine } from './utils';
 
-const INNER_WIDTH = 544;
-
-function alignRow(left: string, right: string, width: number): string {
-  if (left.length + right.length >= width) return `${left} ${right}`.slice(0, width);
-  return left + ' '.repeat(width - left.length - right.length) + right;
-}
-
-function centerLine(text: string, width: number): string {
-  if (text.length >= width) return text.slice(0, width);
-  const left = Math.floor((width - text.length) / 2);
-  const right = width - text.length - left;
-  return ' '.repeat(left) + text + ' '.repeat(right);
-}
+const BODY_WIDTH = 544;
 
 function nowClock(): string {
   const now = new Date();
@@ -27,19 +16,18 @@ function pct(confidence: number): string {
 
 function topDetections(detections: Detection[]): string[] {
   const [top, second, third] = detections;
-  if (!top) return [centerLine('No detections yet', INNER_WIDTH)];
+  if (!top) return [centerLine('No detections yet', BODY_WIDTH)];
 
   const lines = [
-    centerLine(top.common_name.slice(0, 28), INNER_WIDTH),
-    centerLine(pct(top.confidence), INNER_WIDTH),
+    centerLine(top.common_name.slice(0, 28), BODY_WIDTH),
+    centerLine(pct(top.confidence), BODY_WIDTH),
   ];
 
   if (second) {
-    lines.push('');
-    lines.push(alignRow(second.common_name.slice(0, 22), pct(second.confidence), INNER_WIDTH));
+    lines.push(alignRow(second.common_name.slice(0, 20), pct(second.confidence), BODY_WIDTH));
   }
   if (third) {
-    lines.push(alignRow(third.common_name.slice(0, 22), pct(third.confidence), INNER_WIDTH));
+    lines.push(alignRow(third.common_name.slice(0, 20), pct(third.confidence), BODY_WIDTH));
   }
 
   return lines;
@@ -50,51 +38,51 @@ function bodyForState(state: BirdieHudState): string {
     case 'IDLE':
       return [
         '',
-        centerLine('birdie', INNER_WIDTH),
+        centerLine('birdie', BODY_WIDTH),
         '',
-        centerLine('Ready to listen', INNER_WIDTH),
+        centerLine('Ready to listen', BODY_WIDTH),
         '',
-        centerLine('Tap once to start capture', INNER_WIDTH),
+        centerLine('Tap once to start capture', BODY_WIDTH),
       ].join('\n');
     case 'LISTENING':
       return [
         '',
-        centerLine('[REC] Listening', INNER_WIDTH),
+        centerLine('[REC] Listening', BODY_WIDTH),
         '',
-        centerLine('====================', INNER_WIDTH),
+        centerLine('====================', BODY_WIDTH),
         '',
-        centerLine('Hold still near birdsong', INNER_WIDTH),
+        centerLine('Hold still near birdsong', BODY_WIDTH),
       ].join('\n');
     case 'ANALYZING':
       return [
         '',
-        centerLine('Analyzing latest clip', INNER_WIDTH),
+        centerLine('Analyzing latest clip', BODY_WIDTH),
         '',
-        centerLine('BirdNET is scoring audio', INNER_WIDTH),
+        centerLine('BirdNET is scoring audio', BODY_WIDTH),
         '',
-        centerLine('Please hold for a moment', INNER_WIDTH),
+        centerLine('Please hold for a moment', BODY_WIDTH),
       ].join('\n');
     case 'DETECTED':
-      return ['', ...topDetections(state.detections)].join('\n');
+      return [''].concat(topDetections(state.detections)).join('\n');
     case 'NO_DETECTION':
       return [
         '',
-        centerLine('No confident match yet', INNER_WIDTH),
+        centerLine('No confident match yet', BODY_WIDTH),
         '',
-        centerLine('Still listening for birds', INNER_WIDTH),
+        centerLine('Still listening for birds', BODY_WIDTH),
         '',
-        centerLine('Try a quieter direction', INNER_WIDTH),
+        centerLine('Try a quieter direction', BODY_WIDTH),
       ].join('\n');
     case 'ERROR':
       return [
         '',
-        centerLine('Capture interrupted', INNER_WIDTH),
+        centerLine('Capture interrupted', BODY_WIDTH),
         '',
-        centerLine(state.message.slice(0, 30), INNER_WIDTH),
+        centerLine(state.message.slice(0, 30), BODY_WIDTH),
         '',
         centerLine(
           state.retryCountdown > 0 ? `Retrying in ${state.retryCountdown}s` : 'Tap to try again',
-          INNER_WIDTH,
+          BODY_WIDTH,
         ),
       ].join('\n');
   }
@@ -103,17 +91,17 @@ function bodyForState(state: BirdieHudState): string {
 function footerForState(state: BirdieHudState): string {
   switch (state.type) {
     case 'IDLE':
-      return alignRow('tap to listen', 'birdie', INNER_WIDTH);
+      return alignRow('tap to listen', 'birdie', BODY_WIDTH);
     case 'LISTENING':
-      return alignRow('capturing ambient audio', 'tap to stop', INNER_WIDTH);
+      return alignRow('listening live', 'tap to stop', BODY_WIDTH);
     case 'ANALYZING':
-      return alignRow('uploading + identifying', 'please wait', INNER_WIDTH);
+      return alignRow('uploading clip', 'please wait', BODY_WIDTH);
     case 'DETECTED':
-      return alignRow('top match on screen', 'listening continues', INNER_WIDTH);
+      return alignRow('top match shown', 'listening', BODY_WIDTH);
     case 'NO_DETECTION':
-      return alignRow('no birds identified', 'listening continues', INNER_WIDTH);
+      return alignRow('no birds yet', 'listening', BODY_WIDTH);
     case 'ERROR':
-      return alignRow('check diagnostics', state.retryCountdown > 0 ? 'auto retry' : 'tap again', INNER_WIDTH);
+      return alignRow('check diagnostics', state.retryCountdown > 0 ? 'auto retry' : 'tap again', BODY_WIDTH);
   }
 }
 
@@ -122,7 +110,7 @@ export function renderHudContent(state: BirdieHudState): HudRenderState {
     layout: LAYOUT,
     textContents: {
       shield: ' ',
-      header: alignRow(nowClock(), 'birdie', INNER_WIDTH),
+      header: alignRow(nowClock(), 'birdie', BODY_WIDTH),
       body: bodyForState(state),
       footer: footerForState(state),
     },

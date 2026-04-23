@@ -116,6 +116,32 @@
     border-radius: 22px;
   }
 
+  .birdie-card-body {
+    padding: 1.1rem 1.15rem;
+  }
+
+  .birdie-card-body--hero {
+    padding: 1.2rem 1.2rem 1.25rem;
+  }
+
+  .birdie-section-title {
+    margin: 0;
+    color: #243024;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .birdie-section-kicker {
+    margin: 0;
+    color: rgba(90, 104, 86, 0.74);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
   .birdie-bottom-nav {
     display: flex;
     align-items: center;
@@ -172,9 +198,18 @@
   }
 
   .birdie-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: 1px solid rgba(124, 142, 111, 0.18);
     background: rgba(247, 250, 242, 0.92);
     border-radius: 9999px;
+    padding: 0.22rem 0.56rem;
+    min-height: 1.55rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    text-transform: capitalize;
   }
 
   .birdie-chip--interactive {
@@ -197,6 +232,43 @@
 
   .birdie-quiet-button:hover {
     background: rgba(239, 245, 233, 0.98);
+  }
+
+  .birdie-listen-button {
+    width: 100%;
+    min-height: 3.35rem;
+    border-radius: 18px;
+    border: 1px solid rgba(118, 151, 106, 0.2);
+    background:
+      linear-gradient(180deg, rgba(244, 249, 239, 0.98), rgba(231, 240, 224, 0.98)),
+      rgba(255, 255, 255, 0.92);
+    color: #294129;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  .birdie-listen-button:hover {
+    background:
+      linear-gradient(180deg, rgba(239, 246, 233, 0.99), rgba(223, 235, 214, 0.99)),
+      rgba(255, 255, 255, 0.96);
+    color: #223622;
+  }
+
+  .birdie-listen-button--stop {
+    border-color: rgba(178, 111, 111, 0.24);
+    background:
+      linear-gradient(180deg, rgba(255, 243, 241, 0.98), rgba(248, 225, 221, 0.98)),
+      rgba(255, 255, 255, 0.94);
+    color: #7b2f2f;
+  }
+
+  .birdie-listen-button--stop:hover {
+    background:
+      linear-gradient(180deg, rgba(255, 238, 236, 0.99), rgba(244, 216, 211, 0.99)),
+      rgba(255, 255, 255, 0.96);
+    color: #6d2727;
   }
 
   .birdie-quiet-button[data-variant='danger'] {
@@ -275,6 +347,30 @@
     );
     background-size: 220% 100%;
     animation: birdie-shimmer 2.8s linear infinite;
+  }
+
+  .birdie-waveform-shell {
+    border: 1px solid rgba(124, 142, 111, 0.14);
+    background: rgba(255, 255, 255, 0.94);
+    border-radius: 18px;
+    padding: 0.85rem 0.95rem 0.95rem;
+  }
+
+  .birdie-waveform {
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(124, 142, 111, 0.12);
+    background:
+      linear-gradient(180deg, rgba(242, 247, 238, 0.92), rgba(255, 255, 255, 0.96)),
+      repeating-linear-gradient(
+        180deg,
+        rgba(124, 142, 111, 0.08) 0,
+        rgba(124, 142, 111, 0.08) 1px,
+        transparent 1px,
+        transparent 9px
+      );
+    padding: 0.35rem 0.45rem;
   }
 }
 

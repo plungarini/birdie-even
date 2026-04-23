@@ -1,5 +1,6 @@
-import { Badge, Card, SectionHeader, StatusDot, allIcons } from 'even-toolkit/web';
+import { Badge, Button, Card, StatusDot, allIcons } from 'even-toolkit/web';
 import React, { useSyncExternalStore } from 'react';
+import { requestCaptureControl } from '../control';
 import { birdieStore } from '../store';
 import type { BirdieStoreState } from '../store';
 
@@ -66,15 +67,53 @@ function confidenceVariant(confidence: number): BadgeVariant {
   return 'neutral';
 }
 
+function LiveWaveform({ peaks, active }: { peaks: number[]; active: boolean }) {
+  const width = 100;
+  const height = 30;
+  const gap = 1.15;
+  const barWidth = Math.max(0.75, (width - gap * (peaks.length - 1)) / peaks.length);
+
+  return (
+    <div className="birdie-waveform-shell">
+      <div className="flex items-center justify-between gap-3">
+        <p className="birdie-section-kicker">Live audio</p>
+        <p className="text-detail text-text-dim">{active ? 'Realtime mic preview' : 'Starts with the next listening pass'}</p>
+      </div>
+      <div className="birdie-waveform mt-3">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-[60px] w-full" preserveAspectRatio="none" aria-hidden="true">
+          {peaks.map((peak, index) => {
+            const normalized = active ? Math.max(0.08, peak) : Math.max(0.04, peak * 0.45);
+            const barHeight = Math.max(2, normalized * (height - 4));
+            const x = index * (barWidth + gap);
+            const y = (height - barHeight) / 2;
+            return (
+              <rect
+                key={index}
+                x={x}
+                y={y}
+                width={barWidth}
+                height={barHeight}
+                rx={barWidth / 2}
+                fill={active ? 'rgba(43, 58, 42, 0.9)' : 'rgba(92, 108, 87, 0.36)'}
+              />
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 function DetectionList({ detections, heardAt }: { detections: BirdieStoreState['lastDetections']; heardAt: number | null }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <SectionHeader title="Recent detections" />
+        <p className="birdie-section-title">Recent detections</p>
         <p className="text-detail text-text-dim">{detections.length} species in last clip</p>
       </div>
       {detections.slice(0, 6).map((d, i) => (
-        <Card key={`${d.common_name}-${i}`} padding="default" className="birdie-surface-card">
+        <Card key={`${d.common_name}-${i}`} padding="none" className="birdie-surface-card">
+          <div className="birdie-card-body">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-normal-title text-text break-words">{d.common_name}</p>
@@ -85,6 +124,7 @@ function DetectionList({ detections, heardAt }: { detections: BirdieStoreState['
             </div>
             <Badge variant={confidenceVariant(d.confidence)} className="birdie-chip">{pct(d.confidence)}</Badge>
           </div>
+          </div>
         </Card>
       ))}
     </section>
@@ -93,7 +133,7 @@ function DetectionList({ detections, heardAt }: { detections: BirdieStoreState['
 
 export function HomeView() {
   const state = useStore();
-  const { hudStateType, lastDetections, lastDetectionsUpdatedAt, lastError, isListening } = state;
+  const { hudStateType, lastDetections, lastDetectionsUpdatedAt, lastError, isCaptureActive, waveformPeaks } = state;
   const featuredDetection =
     lastDetections.length > 0
       ? [...lastDetections].sort((a, b) => b.confidence - a.confidence)[0]
@@ -115,18 +155,18 @@ export function HomeView() {
   return (
     <div className="birdie-scroll-panel">
       <div className="flex flex-col gap-5 pb-6">
-        <Card padding="default" className={`birdie-surface-card birdie-hero ${modeToneClass}`}>
-          <div className="relative flex flex-col gap-5 p-1">
+        <Card padding="none" className={`birdie-surface-card birdie-hero ${modeToneClass}`}>
+          <div className="birdie-card-body birdie-card-body--hero relative flex flex-col gap-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-2">
-                <p className="text-detail uppercase tracking-[0.32em] text-text-dim">birdie companion</p>
+                <p className="birdie-section-kicker">birdie companion</p>
                 <h2 className="text-[1.9rem] leading-[1.02] tracking-[-0.04em] text-text">
                   {hudStateType === 'DETECTED' && featuredDetection ? featuredDetection.common_name : 'Listen for the next bird.'}
                 </h2>
                 <p className="text-normal-body text-text-dim">{statusLine}</p>
               </div>
-              <div className={isListening ? 'birdie-hero__pulse' : ''}>
-                <StatusDot connected={isListening} />
+              <div className={isCaptureActive ? 'birdie-hero__pulse' : ''}>
+                <StatusDot connected={isCaptureActive} />
               </div>
             </div>
 
@@ -136,6 +176,17 @@ export function HomeView() {
             </div>
 
             <p className="max-w-[30ch] text-normal-body leading-snug text-text-dim">{STATE_HINT[hudStateType]}</p>
+
+            <div className="flex flex-col gap-3">
+              {isCaptureActive ? <LiveWaveform peaks={waveformPeaks} active={isCaptureActive} /> : null}
+              <Button
+                variant={isCaptureActive ? 'danger' : 'default'}
+                onClick={() => requestCaptureControl(isCaptureActive ? 'stop' : 'start')}
+                className={`birdie-listen-button ${isCaptureActive ? 'birdie-listen-button--stop' : ''}`}
+              >
+                {isCaptureActive ? 'Stop listening' : 'Start listening'}
+              </Button>
+            </div>
 
             {featuredDetection ? (
               <div className="rounded-[18px] border border-border-light bg-white/55 px-4 py-4">
@@ -167,9 +218,9 @@ export function HomeView() {
         </Card>
 
         {hudStateType === 'NO_DETECTION' && (
-          <Card padding="default" className="birdie-surface-card">
-            <div className="flex flex-col gap-3">
-              <SectionHeader title="Try a stronger capture" />
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body flex flex-col gap-3">
+              <p className="birdie-section-title">Try a stronger capture</p>
               <div className="grid gap-2 text-normal-body text-text-dim">
                 <p>Stand still for a few seconds so the microphone can isolate the clearest call.</p>
                 <p>Aim the glasses toward open air, away from indoor fans, traffic, or your own voice.</p>
@@ -180,12 +231,14 @@ export function HomeView() {
         )}
 
       {lastError && hudStateType === 'ERROR' && (
-          <Card padding="default" className="birdie-surface-card border-negative/30 bg-negative/5">
+          <Card padding="none" className="birdie-surface-card border-negative/30 bg-negative/5">
+            <div className="birdie-card-body">
             <p className="text-detail text-text-dim uppercase tracking-[0.28em] mb-2">Recovery note</p>
             <p className="text-normal-body text-negative">{lastError}</p>
             <p className="mt-2 text-detail text-text-dim">
               Birdie keeps your last results in view, and the next capture can resume normally once the connection settles.
             </p>
+            </div>
           </Card>
         )}
 
@@ -193,9 +246,9 @@ export function HomeView() {
           <DetectionList detections={lastDetections} heardAt={lastDetectionsUpdatedAt} />
         ) : null}
 
-        <Card padding="default" className="birdie-surface-card">
-          <div className="flex flex-col gap-3">
-            <SectionHeader title="Session rhythm" />
+        <Card padding="none" className="birdie-surface-card">
+          <div className="birdie-card-body flex flex-col gap-4">
+            <p className="birdie-section-title">Session rhythm</p>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-[16px] bg-white/55 px-3 py-3">
                 <p className="text-detail uppercase tracking-[0.22em] text-text-dim">Mode</p>
@@ -207,7 +260,7 @@ export function HomeView() {
               </div>
               <div className="rounded-[16px] bg-white/55 px-3 py-3">
                 <p className="text-detail uppercase tracking-[0.22em] text-text-dim">Capture</p>
-                <p className="mt-2 text-normal-title text-text">{isListening ? 'Live' : 'Standby'}</p>
+                <p className="mt-2 text-normal-title text-text">{isCaptureActive ? 'Live' : 'Standby'}</p>
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
-import { Button, Card, EmptyState, Toast, allIcons } from 'even-toolkit/web';
-import React, { useEffect, useState } from 'react';
+import { Button, Card, allIcons } from 'even-toolkit/web';
+import React, { useEffect, useRef, useState } from 'react';
 
 type SvgIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 const IcChecklist = allIcons['edit-checklist'] as SvgIcon;
@@ -95,8 +95,37 @@ export function LogsPanel() {
   const allLogs = useDebugLogs();
   const [filters, setFilters] = useState<Record<LogLevel, boolean>>({ log: true, warn: true, error: true });
   const [toast, setToast] = useState('');
+  const [isFeedPaused, setIsFeedPaused] = useState(false);
+  const [visibleLogs, setVisibleLogs] = useState<LogEntry[]>(allLogs);
+  const toastTimeoutRef = useRef<number | null>(null);
 
-  const filteredLogs = allLogs.filter((l) => filters[l.level as LogLevel] ?? true);
+  useEffect(() => {
+    if (!isFeedPaused) {
+      setVisibleLogs(allLogs);
+    }
+  }, [allLogs, isFeedPaused]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current !== null) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const filteredLogs = visibleLogs.filter((l) => filters[l.level as LogLevel] ?? true);
+
+  function showToast(message: string) {
+    setToast(message);
+    if (toastTimeoutRef.current !== null) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast('');
+      setIsFeedPaused(false);
+      toastTimeoutRef.current = null;
+    }, 2200);
+  }
 
   function toggleFilter(level: LogLevel) {
     setFilters((f) => ({ ...f, [level]: !f[level] }));
@@ -109,24 +138,36 @@ export function LogsPanel() {
   }
 
   async function copyLogs() {
-    const text = allLogs.map((l) => {
+    const snapshot = filteredLogs;
+    const text = snapshot.map((l) => {
       const header = `[${l.level.toUpperCase()}] ${l.msg}`;
       return l.details?.length ? header + '\n' + formatDetails(l.details) : header;
     }).join('\n\n');
     try {
-      await navigator.clipboard.writeText(text);
-      setToast('Copied to clipboard');
+      setIsFeedPaused(true);
+      setVisibleLogs(allLogs);
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.pointerEvents = 'none';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showToast(successful ? 'Logs copied' : 'Copy failed');
     } catch {
-      setToast('Copy failed');
+      showToast('Copy failed');
     }
-    setTimeout(() => setToast(''), 2000);
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <Card padding="default" className="birdie-surface-card">
-        <div className="flex flex-col gap-2">
-          <p className="text-detail uppercase tracking-[0.28em] text-text-dim">Diagnostics</p>
+      <Card padding="none" className="birdie-surface-card">
+        <div className="birdie-card-body flex flex-col gap-2">
+          <p className="birdie-section-kicker">Diagnostics</p>
           <p className="text-normal-body text-text-dim">
             Runtime logs for Birdie capture, network responses, and worker failures.
           </p>
@@ -153,17 +194,27 @@ export function LogsPanel() {
 
       <Card padding="none" className="birdie-surface-card overflow-hidden">
         {filteredLogs.length === 0 ? (
-          <EmptyState
-            icon={<IcChecklist width={32} height={32} />}
-            title="No logs"
-            description={allLogs.length === 0 ? 'Logs will appear once the app starts.' : 'Nothing matches the current filters.'}
-          />
-        ) : (
-          <div className="max-h-[320px] overflow-y-auto px-2 py-2">
-            <div className="flex flex-col gap-2">
-              {filteredLogs.map((l, i) => <LogItem key={i} log={l} />)}
+          <div className="birdie-card-body flex min-h-[180px] flex-col items-center justify-center gap-4 text-center">
+            <div className="flex size-14 items-center justify-center rounded-[18px] border border-dashed border-border bg-white/65">
+              <IcChecklist width={30} height={30} className="text-text-dim" />
+            </div>
+            <div className="space-y-2">
+              <p className="birdie-section-title">
+                {allLogs.length === 0 ? 'Waiting for runtime activity' : 'No logs match these filters'}
+              </p>
+              <p className="mx-auto max-w-[26ch] text-normal-body text-text-dim">
+                {allLogs.length === 0
+                  ? 'Start a capture or open the glasses flow to populate Birdie diagnostics.'
+                  : 'Try enabling another log level to bring matching entries back into view.'}
+              </p>
             </div>
           </div>
+        ) : (
+            <div className="max-h-[320px] overflow-y-auto p-3">
+              <div className="flex flex-col gap-2">
+                {filteredLogs.map((l, i) => <LogItem key={i} log={l} />)}
+              </div>
+            </div>
         )}
       </Card>
 
@@ -176,7 +227,12 @@ export function LogsPanel() {
 
       {toast && (
         <div className="fixed bottom-24 left-4 right-4 z-50">
-          <Toast message={toast} />
+          <div className="birdie-surface-card birdie-card-body text-center">
+            <p className="birdie-section-title">{toast}</p>
+            <p className="mt-1 text-detail text-text-dim">
+              {toast === 'Logs copied' ? 'A filtered Birdie diagnostics snapshot is now on the clipboard.' : 'Birdie could not copy the current diagnostics snapshot.'}
+            </p>
+          </div>
         </div>
       )}
     </div>

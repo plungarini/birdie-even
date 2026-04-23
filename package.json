@@ -1,5 +1,6 @@
 {
 	"dependencies": {
+		"@evenrealities/pretext": "^0.1.4",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"even-toolkit": "^1.5.0",
@@ -30,6 +31,7 @@
 	"private": true,
 	"scripts": {
 		"build": "tsc && vite build",
+		"deploy:birdnet": "powershell -ExecutionPolicy Bypass -File ./birdnet-server/deploy.ps1",
 		"dev": "concurrently -n QR,VITE,SERVER -c cyan,green,yellow \"npm run qr\" \"vite --host 0.0.0.0 --port 5173\" \"npm run server\"",
 		"emulator": "npx evenhub-simulator http://localhost:5173/",
 		"pack": "npm run build && evenhub pack app.json dist -o birdie.ehpk",
