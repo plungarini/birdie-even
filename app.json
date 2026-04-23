@@ -5,11 +5,11 @@
 	"entrypoint": "index.html",
 	"min_app_version": "2.1.1",
 	"min_sdk_version": "0.0.10",
-	"name": "BirdLens",
+	"name": "Birdie",
 	"package_id": "com.plungarini.birdie",
 	"permissions": [
 		{
-			"desc": "Sends short microphone clips to the BirdLens analysis backend to identify bird songs.",
+			"desc": "Sends short microphone clips to the Birdie analysis backend to identify bird songs.",
 			"name": "network"
 		},
 		{
