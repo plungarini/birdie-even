@@ -10,4 +10,3 @@ enabled = true
 BIRDNET_SERVER_URL = "http://178.104.253.55:8080"
 ALLOWED_ORIGIN = "*"
 # BIRDNET_API_KEY is a secret — set via .dev.vars locally or `wrangler secret put BIRDNET_API_KEY` in production.
-ALLOWED_ORIGIN = "*"

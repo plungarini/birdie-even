@@ -1,3 +1,2 @@
+# Secret only — non-secrets (BIRDNET_SERVER_URL, ALLOWED_ORIGIN) live in wrangler.toml [vars].
 BIRDNET_API_KEY=changeme
-BIRDNET_SERVER_URL=http://xxx.xxx.xxx.xxx:8080
-ALLOWED_ORIGIN=*
