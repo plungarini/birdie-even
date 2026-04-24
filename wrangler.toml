@@ -1,0 +1,11 @@
+name = "birdie-even"
+main = "server/index.ts"
+compatibility_date = "2026-04-22"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[vars]
+ALLOWED_ORIGIN = "*"
+# BIRDNET_API_KEY, BIRDNET_SERVER_URL, and EBIRD_API_TOKEN are secrets — set via .dev.vars locally or `wrangler secret put` in production.

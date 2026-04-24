@@ -1,4 +1,4 @@
-# BirdLens
+# birdie
 
 Even Realities glasses app built with [even-toolkit](https://github.com/fabioglimb/even-toolkit).
 

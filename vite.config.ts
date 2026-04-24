@@ -2,12 +2,40 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
+// Forces a full page reload on src/ changes so module-level SDK singletons
+// (bridge, audio capture state) are always re-initialized from scratch.
+function fullReloadPlugin() {
+  return {
+    name: 'full-reload',
+    handleHotUpdate({ file, server }: { file: string; server: { ws: { send: (p: unknown) => void } } }) {
+      if (file.includes('/src/')) {
+        server.ws.send({ type: 'full-reload' });
+        return [];
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), fullReloadPlugin()],
   base: './',
   server: {
     host: true,
     port: 5173,
+    proxy: {
+      '/analyze': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+      '/enrich': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+      '/i18n': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',

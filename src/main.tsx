@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router';
 import App from './App';
 import './app.css';
+import './debug/logs';
+// Side-effect import: bootstraps the raw-SDK glasses/HUD layer in the same bundle.
+// The two layers never import each other; they share state via `./store` only.
+import './glasses-main';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

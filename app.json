@@ -1,16 +1,31 @@
 {
-  "package_id": "com.plungarini.birdie",
-  "name": "BirdLens",
-  "version": "0.0.0",
-  "edition": "202601",
-  "entrypoint": "index.html",
-  "description": "BirdLens app for Even Realities glasses",
-  "author": "plungarini",
-  "permissions": [],
-  "supported_languages": [
-    "en"
-  ],
-  "tagline": "",
-  "min_app_version": "2.1.1",
-  "min_sdk_version": "0.0.9"
+	"author": "Pietro Lungarini",
+	"description": "Real-time bird identification for Even Realities G2. Listens through the mic, sends audio to BirdNET, and shows detected species on the HUD.",
+	"edition": "202601",
+	"entrypoint": "index.html",
+	"min_app_version": "2.1.1",
+	"min_sdk_version": "0.0.10",
+	"name": "Birdie",
+	"package_id": "com.plungarini.birdie",
+	"permissions": [
+		{
+			"desc": "Sends short microphone clips to the Birdie analysis backend to identify bird songs.",
+			"name": "network"
+		},
+		{
+			"desc": "Captures ambient sound to identify nearby bird species.",
+			"name": "g2-microphone"
+		},
+		{
+			"desc": "Captures ambient sound to identify nearby bird species.",
+			"name": "phone-microphone"
+		},
+		{
+			"desc": "Gets location for better bird identification.",
+			"name": "location"
+		}
+	],
+	"supported_languages": ["en"],
+	"tagline": "Hear a bird? Know it instantly.",
+	"version": "0.1.0"
 }
