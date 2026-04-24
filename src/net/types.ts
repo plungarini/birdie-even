@@ -9,7 +9,8 @@ export interface Detection {
 }
 
 export interface AnalyzeResponse {
-  detections: Detection[];
+  detections: EnrichedDetection[];
+  locale?: string;
   error?: string;
 }
 

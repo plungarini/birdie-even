@@ -8,7 +8,7 @@ import { buildPopupText, buildWaveContent, renderInitialListeningHud, renderStat
 import { HudSession, LAYOUTS } from './hud/session';
 import { stateMachine } from './hud/state-machine';
 import { WaveformBuffer } from './hud/waveform-buffer';
-import { analyze, enrichSpecies, mergeEnrichment } from './net/client';
+import { analyze } from './net/client';
 import { AnalyzeError } from './net/types';
 import {
 	getAnalyzeRequestPreferences,
@@ -183,11 +183,8 @@ async function onWavReady(wav: Blob) {
 			console.log('[birdie] stale analyze result ignored');
 			return;
 		}
-		const uniqueNames = Array.from(new Set(detections.map((d) => d.scientific_name)));
-		const enrichResp = await enrichSpecies(uniqueNames, getPreferencesState().values.locale);
-		const enriched = mergeEnrichment(detections, enrichResp);
-		console.log('[birdie] analyze success', { detections: enriched.length });
-		stateMachine.onDetections(enriched, enriched);
+		console.log('[birdie] analyze success', { detections: detections.length });
+		stateMachine.onDetections(detections, detections);
 	} catch (err) {
 		const details = getAnalyzeErrorDetails(err);
 		if (requestToken !== captureSessionToken || stateMachine.getState().type === 'IDLE') {

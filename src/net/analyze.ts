@@ -1,9 +1,14 @@
 import { config } from '../config';
-import { AnalyzeError, type AnalyzeRequestPreferences, type AnalyzeResponse, type Detection } from './types';
+import {
+	AnalyzeError,
+	type AnalyzeRequestPreferences,
+	type AnalyzeResponse,
+	type EnrichedDetection,
+} from './types';
 
 const TIMEOUT_MS = 15_000;
 
-export async function analyze(wavBlob: Blob, preferences: AnalyzeRequestPreferences): Promise<Detection[]> {
+export async function analyze(wavBlob: Blob, preferences: AnalyzeRequestPreferences): Promise<EnrichedDetection[]> {
   const form = new FormData();
   form.append('file', wavBlob, 'audio.wav');
   form.append('settings', JSON.stringify(preferences));
