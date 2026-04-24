@@ -1,8 +1,8 @@
 import { Badge, Button, Card, StatusDot, allIcons } from 'even-toolkit/web';
-import React, { useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useSyncExternalStore, useState } from 'react';
 import { requestCaptureControl } from '../control';
-import { birdieStore } from '../store';
-import type { BirdieStoreState } from '../store';
+import { birdieStore, selectOrderedDetections } from '../store';
+import type { AggregatedDetection, BirdieStoreState } from '../store';
 
 type SvgIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 const IcBird = allIcons['feat-message'] as SvgIcon;
@@ -44,19 +44,15 @@ function pct(confidence: number): string {
   return `${Math.round(confidence * 100)}%`;
 }
 
-function formatRelativeTime(ts: number | null): string {
-  if (!ts) return 'Waiting for the first clip';
-
+function formatShortRelative(ts: number | null): string {
+  if (!ts) return '—';
   const diffSeconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  if (diffSeconds < 10) return 'Heard just now';
+  if (diffSeconds < 10) return 'just now';
   if (diffSeconds < 60) return `${diffSeconds}s ago`;
-
   const diffMinutes = Math.round(diffSeconds / 60);
   if (diffMinutes < 60) return `${diffMinutes}m ago`;
-
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
-
   const diffDays = Math.round(diffHours / 24);
   return `${diffDays}d ago`;
 }
@@ -66,6 +62,8 @@ function confidenceVariant(confidence: number): BadgeVariant {
   if (confidence >= 0.55) return 'accent';
   return 'neutral';
 }
+
+const BLIMP_DURATION_MS = 4500;
 
 function LiveWaveform({ peaks, active }: { peaks: number[]; active: boolean }) {
   const width = 100;
@@ -104,44 +102,75 @@ function LiveWaveform({ peaks, active }: { peaks: number[]; active: boolean }) {
   );
 }
 
-function DetectionList({ detections, heardAt }: { detections: BirdieStoreState['lastDetections']; heardAt: number | null }) {
+function DetectionCard({
+  detection,
+  isBlimping,
+}: {
+  detection: AggregatedDetection;
+  isBlimping: boolean;
+}) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="birdie-section-title">Recent detections</p>
-        <p className="text-detail text-text-dim">{detections.length} species in last clip</p>
-      </div>
-      {detections.slice(0, 6).map((d, i) => (
-        <Card key={`${d.common_name}-${i}`} padding="none" className="birdie-surface-card">
-          <div className="birdie-card-body">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-normal-title text-text break-words">{d.common_name}</p>
-              <p className="mt-1 text-detail italic text-text-dim break-words">{d.scientific_name}</p>
-              <p className="mt-3 text-detail text-text-dim">
-                {formatRelativeTime(heardAt)} • {Math.max(0, d.end_time - d.start_time).toFixed(1)}s window
-              </p>
+    <Card padding="none" className={`birdie-surface-card ${isBlimping ? 'birdie-card--blimp' : ''}`}>
+      <div className="birdie-card-body">
+        <div className="flex items-start justify-between gap-3">
+          {detection.image_url ? (
+            <img
+              src={detection.image_url}
+              alt=""
+              className="h-16 w-16 flex-none rounded-[14px] object-cover bg-white/40"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <p className="text-normal-title text-text break-words">{detection.common_name}</p>
+            <p className="mt-1 text-detail italic text-text-dim break-words">{detection.scientific_name}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant={confidenceVariant(detection.bestConfidence)} className="birdie-chip">
+                {pct(detection.bestConfidence)}
+              </Badge>
+              <Badge variant="neutral" className="birdie-chip">Heard {detection.count}×</Badge>
+              <Badge variant="neutral" className="birdie-chip">{formatShortRelative(detection.lastDetectedAt)}</Badge>
             </div>
-            <Badge variant={confidenceVariant(d.confidence)} className="birdie-chip">{pct(d.confidence)}</Badge>
           </div>
-          </div>
-        </Card>
-      ))}
-    </section>
+        </div>
+      </div>
+    </Card>
   );
 }
 
 export function HomeView() {
   const state = useStore();
-  const { hudStateType, lastDetections, lastDetectionsUpdatedAt, lastError, isCaptureActive, waveformPeaks } = state;
-  const featuredDetection =
-    lastDetections.length > 0
-      ? [...lastDetections].sort((a, b) => b.confidence - a.confidence)[0]
-      : null;
+  const { hudStateType, lastError, isCaptureActive, waveformPeaks, latestBirdKeys, latestBirdUpdatedAt } = state;
+  const ordered = selectOrderedDetections(state);
+  const featured = ordered[0] ?? null;
   const modeToneClass = hudStateType === 'LISTENING' || hudStateType === 'ANALYZING' ? 'birdie-subtle-shimmer' : '';
+
+  // Reactive blimp set — keys pulse for BLIMP_DURATION_MS then are cleared.
+  const [blimpingKeys, setBlimpingKeys] = useState<ReadonlySet<string>>(new Set());
+  const blimpTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    if (!latestBirdKeys.length || !latestBirdUpdatedAt) return;
+    setBlimpingKeys((prev) => new Set([...prev, ...latestBirdKeys]));
+    for (const key of latestBirdKeys) {
+      const existing = blimpTimers.current.get(key);
+      if (existing) clearTimeout(existing);
+      blimpTimers.current.set(key, setTimeout(() => {
+        setBlimpingKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        blimpTimers.current.delete(key);
+      }, BLIMP_DURATION_MS));
+    }
+  }, [latestBirdKeys, latestBirdUpdatedAt]);
+
   const statusLine =
-    hudStateType === 'DETECTED' && featuredDetection
-      ? `${lastDetections.length} species surfaced in the latest pass`
+    hudStateType === 'DETECTED' && featured
+      ? `${featured.common_name} · heard ${featured.count}×`
       : hudStateType === 'LISTENING'
         ? 'Listening for birdsong'
         : hudStateType === 'ANALYZING'
@@ -161,7 +190,7 @@ export function HomeView() {
               <div className="flex min-w-0 flex-col gap-2">
                 <p className="birdie-section-kicker">birdie companion</p>
                 <h2 className="text-[1.9rem] leading-[1.02] tracking-[-0.04em] text-text">
-                  {hudStateType === 'DETECTED' && featuredDetection ? featuredDetection.common_name : 'Listen for the next bird.'}
+                  {featured ? featured.common_name : 'Listen for the next bird.'}
                 </h2>
                 <p className="text-normal-body text-text-dim">{statusLine}</p>
               </div>
@@ -172,7 +201,7 @@ export function HomeView() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={STATE_BADGE[hudStateType]} className="birdie-chip">{STATE_LABEL[hudStateType]}</Badge>
-              <Badge variant="neutral" className="birdie-chip">{formatRelativeTime(lastDetectionsUpdatedAt)}</Badge>
+              <Badge variant="neutral" className="birdie-chip">{formatShortRelative(state.lastDetectionsUpdatedAt)}</Badge>
             </div>
 
             <p className="max-w-[30ch] text-normal-body leading-snug text-text-dim">{STATE_HINT[hudStateType]}</p>
@@ -188,20 +217,7 @@ export function HomeView() {
               </Button>
             </div>
 
-            {featuredDetection ? (
-              <div className="rounded-[18px] border border-border-light bg-white/55 px-4 py-4">
-                <p className="text-detail uppercase tracking-[0.28em] text-text-dim">Featured detection</p>
-                <div className="mt-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-normal-title text-text break-words">{featuredDetection.common_name}</p>
-                    <p className="mt-1 text-detail italic text-text-dim break-words">{featuredDetection.scientific_name}</p>
-                  </div>
-                  <Badge variant={confidenceVariant(featuredDetection.confidence)} className="birdie-chip">
-                    {pct(featuredDetection.confidence)}
-                  </Badge>
-                </div>
-              </div>
-            ) : (
+            {!featured ? (
               <div className="rounded-[18px] border border-dashed border-border bg-white px-4 py-5">
                 <div className="flex flex-col items-center gap-3 text-center">
                   <IcBird width={30} height={30} className="text-text-dim" />
@@ -213,58 +229,34 @@ export function HomeView() {
                   </div>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </Card>
 
-        {hudStateType === 'NO_DETECTION' && (
-          <Card padding="none" className="birdie-surface-card">
-            <div className="birdie-card-body flex flex-col gap-3">
-              <p className="birdie-section-title">Try a stronger capture</p>
-              <div className="grid gap-2 text-normal-body text-text-dim">
-                <p>Stand still for a few seconds so the microphone can isolate the clearest call.</p>
-                <p>Aim the glasses toward open air, away from indoor fans, traffic, or your own voice.</p>
-                <p>Another pass often works once the bird repeats its phrase.</p>
-              </div>
-            </div>
-          </Card>
-        )}
-
-      {lastError && hudStateType === 'ERROR' && (
+        {lastError && hudStateType === 'ERROR' && (
           <Card padding="none" className="birdie-surface-card border-negative/30 bg-negative/5">
             <div className="birdie-card-body">
-            <p className="text-detail text-text-dim uppercase tracking-[0.28em] mb-2">Recovery note</p>
-            <p className="text-normal-body text-negative">{lastError}</p>
-            <p className="mt-2 text-detail text-text-dim">
-              Birdie keeps your last results in view, and the next capture can resume normally once the connection settles.
-            </p>
+              <p className="text-detail text-text-dim uppercase tracking-[0.28em] mb-2">Recovery note</p>
+              <p className="text-normal-body text-negative">{lastError}</p>
             </div>
           </Card>
         )}
 
-        {lastDetections.length > 0 ? (
-          <DetectionList detections={lastDetections} heardAt={lastDetectionsUpdatedAt} />
-        ) : null}
-
-        <Card padding="none" className="birdie-surface-card">
-          <div className="birdie-card-body flex flex-col gap-4">
-            <p className="birdie-section-title">Session rhythm</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-[16px] bg-white/55 px-3 py-3">
-                <p className="text-detail uppercase tracking-[0.22em] text-text-dim">Mode</p>
-                <p className="mt-2 text-normal-title text-text">{STATE_LABEL[hudStateType]}</p>
-              </div>
-              <div className="rounded-[16px] bg-white/55 px-3 py-3">
-                <p className="text-detail uppercase tracking-[0.22em] text-text-dim">Species</p>
-                <p className="mt-2 text-normal-title text-text">{lastDetections.length}</p>
-              </div>
-              <div className="rounded-[16px] bg-white/55 px-3 py-3">
-                <p className="text-detail uppercase tracking-[0.22em] text-text-dim">Capture</p>
-                <p className="mt-2 text-normal-title text-text">{isCaptureActive ? 'Live' : 'Standby'}</p>
-              </div>
+        {ordered.length > 0 ? (
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="birdie-section-title">Birds heard</p>
+              <p className="text-detail text-text-dim">{ordered.length} species tracked</p>
             </div>
-          </div>
-        </Card>
+            {ordered.map((d) => (
+              <DetectionCard
+                key={d.scientific_name}
+                detection={d}
+                isBlimping={blimpingKeys.has(d.scientific_name)}
+              />
+            ))}
+          </section>
+        ) : null}
       </div>
     </div>
   );

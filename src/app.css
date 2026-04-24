@@ -399,3 +399,23 @@
     background-position: -20% 0;
   }
 }
+
+@keyframes birdie-blimp {
+  0%,
+  100% {
+    border-color: rgba(124, 142, 111, 0.18);
+  }
+
+  40% {
+    border-color: rgba(77, 142, 136, 0.82);
+  }
+
+  70% {
+    border-color: rgba(91, 110, 172, 0.78);
+  }
+}
+
+.birdie-card--blimp {
+  animation: birdie-blimp 0.72s ease-in-out 3;
+  will-change: border-color;
+}
