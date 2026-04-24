@@ -15,6 +15,10 @@ function pct(confidence: number): string {
 	return `${Math.round(confidence * 100)}%`;
 }
 
+function displayCommonName(detection: AggregatedDetection): string {
+	return detection.localized_common_name?.trim() || detection.common_name;
+}
+
 function bodyForState(state: BirdieHudState): string {
 	switch (state.type) {
 		case 'IDLE':
@@ -119,7 +123,7 @@ export function buildWaveContent(tick: number, peaksTopToBottom: number[]): stri
 }
 
 export function buildPopupText(detection: AggregatedDetection): string {
-	const common = detection.common_name.slice(0, 40);
+	const common = displayCommonName(detection).slice(0, 40);
 	const sci = `- ${detection.scientific_name}`.slice(0, 42);
 	const meta = `${pct(detection.bestConfidence)} · ${detection.count}x`;
 	return ['\n\n', common, sci, '', meta].join('\n');

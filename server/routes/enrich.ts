@@ -1,12 +1,9 @@
 import type { Hono } from 'hono';
 import { corsHeaders } from '../lib/cors';
 import { buildBirdImageUrl } from '../lib/bird-image';
+import { resolveWorkerLocale, SUPPORTED_LOCALES } from '../lib/locales';
 import { fetchTaxonomyCached } from '../lib/taxonomy';
-import type { EnrichResponse, EnrichedSpecies, Env, TaxonomyInfo } from '../types';
-
-interface EnrichRequestBody {
-	species?: unknown;
-}
+import type { EnrichRequestBody, EnrichResponse, EnrichedSpecies, Env, TaxonomyInfo } from '../types';
 
 function normaliseSpeciesList(raw: unknown): string[] {
 	if (!Array.isArray(raw)) return [];
@@ -38,10 +35,11 @@ export function registerEnrichRoute(app: Hono<{ Bindings: Env }>): void {
 		}
 
 		const species = normaliseSpeciesList(body.species);
-		console.log('[birdie-proxy] POST /enrich', { count: species.length });
+		const locale = resolveWorkerLocale(typeof body.locale === 'string' ? body.locale : undefined);
+		console.log('[birdie-proxy] POST /enrich', { count: species.length, locale });
 
 		if (species.length === 0) {
-			return c.json({ results: {} } satisfies EnrichResponse, 200, corsHeaders(origin));
+			return c.json({ locale, results: {} } satisfies EnrichResponse, 200, corsHeaders(origin));
 		}
 
 		const token = c.env.EBIRD_API_TOKEN;
@@ -51,7 +49,7 @@ export function registerEnrichRoute(app: Hono<{ Bindings: Env }>): void {
 		const settled = await Promise.all(
 			species.map(async (sci) => {
 				try {
-					const taxonomy = await fetchTaxonomyCached(sci, token);
+					const taxonomy = await fetchTaxonomyCached(sci, token, locale);
 					return { sci, taxonomy, err: null as string | null };
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
@@ -68,7 +66,11 @@ export function registerEnrichRoute(app: Hono<{ Bindings: Env }>): void {
 			if (row.err) errors[row.sci] = row.err;
 		}
 
-		const payload: EnrichResponse = Object.keys(errors).length > 0 ? { results, errors } : { results };
+		const payload: EnrichResponse = Object.keys(errors).length > 0 ? { locale, results, errors } : { locale, results };
 		return c.json(payload, 200, corsHeaders(origin));
+	});
+
+	app.get('/i18n/langs', (c) => {
+		return c.json({ langs: [...SUPPORTED_LOCALES] }, 200, corsHeaders(c.env.ALLOWED_ORIGIN));
 	});
 }

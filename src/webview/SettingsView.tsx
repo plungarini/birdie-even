@@ -1,6 +1,8 @@
 import { Button, Card } from 'even-toolkit/web';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { config } from '../config';
+import { getLocaleLabel, resolveSupportedLocale } from '../locale';
+import type { I18nLangsResponse } from '../net/types';
 import {
   clearBirdieLocation,
   getPreferencesState,
@@ -76,6 +78,7 @@ export function SettingsView() {
   const state = useStore();
   const { values: preferences } = usePreferencesState();
   const diagnostics = state.diagnostics;
+  const [localeOptions, setLocaleOptions] = useState<string[]>(['en_us']);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
   const [latInput, setLatInput] = useState(preferences.locationLat?.toFixed(6) ?? '');
   const [lonInput, setLonInput] = useState(preferences.locationLon?.toFixed(6) ?? '');
@@ -84,6 +87,31 @@ export function SettingsView() {
     setLatInput(preferences.locationLat?.toFixed(6) ?? '');
     setLonInput(preferences.locationLon?.toFixed(6) ?? '');
   }, [preferences.locationLat, preferences.locationLon]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLocaleOptions() {
+      try {
+        const response = await fetch(config.useLocalAnalyzeProxy ? '/i18n/langs' : `${config.workerUrl}/i18n/langs`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = (await response.json()) as I18nLangsResponse;
+        const langs = Array.isArray(body.langs) && body.langs.length > 0 ? body.langs : ['en_us'];
+        if (!cancelled) {
+          setLocaleOptions(Array.from(new Set(['en_us', ...langs])));
+        }
+      } catch {
+        if (!cancelled) {
+          setLocaleOptions(['en_us']);
+        }
+      }
+    }
+
+    void loadLocaleOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const lastCaptureLabel = diagnostics.lastCaptureStartedAt
     ? new Date(diagnostics.lastCaptureStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -271,6 +299,31 @@ export function SettingsView() {
               <p className="text-detail text-text-dim">
                 {locationStatus ?? 'Location is optional. Birdie will still analyze clips when coordinates are unset.'}
               </p>
+            </div>
+          </Card>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <p className="birdie-section-title">Bird name language</p>
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body">
+              <label className="birdie-field">
+                <span className="birdie-setting-label">Language</span>
+                <select
+                  value={preferences.locale}
+                  onChange={(event) => updateBirdiePreferences({ locale: resolveSupportedLocale(event.currentTarget.value) })}
+                  className="birdie-input"
+                >
+                  {localeOptions.map((locale) => (
+                    <option key={locale} value={locale}>
+                      {getLocaleLabel(locale)} ({locale})
+                    </option>
+                  ))}
+                </select>
+                <span className="birdie-setting-help">
+                  Birdie localizes common names from eBird taxonomy. Scientific names always stay unchanged.
+                </span>
+              </label>
             </div>
           </Card>
         </section>
