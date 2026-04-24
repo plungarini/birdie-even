@@ -372,6 +372,92 @@
       );
     padding: 0.35rem 0.45rem;
   }
+
+  .birdie-setting-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .birdie-setting-label {
+    margin: 0;
+    color: #243024;
+    font-size: 0.96rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .birdie-setting-help {
+    margin: 0.25rem 0 0;
+    color: rgba(90, 104, 86, 0.86);
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  .birdie-setting-value {
+    flex-shrink: 0;
+    border: 1px solid rgba(124, 142, 111, 0.18);
+    background: rgba(247, 250, 242, 0.92);
+    border-radius: 9999px;
+    padding: 0.32rem 0.68rem;
+    color: #243024;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .birdie-slider {
+    width: 100%;
+    accent-color: #6f8f6a;
+  }
+
+  .birdie-setting-mini {
+    border: 1px solid rgba(124, 142, 111, 0.14);
+    border-radius: 18px;
+    background: rgba(251, 252, 249, 0.92);
+    padding: 0.9rem 0.95rem;
+  }
+
+  .birdie-setting-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid rgba(124, 142, 111, 0.14);
+    border-radius: 18px;
+    background: rgba(251, 252, 249, 0.92);
+    padding: 0.9rem 0.95rem;
+  }
+
+  .birdie-checkbox {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: #6f8f6a;
+    flex-shrink: 0;
+  }
+
+  .birdie-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .birdie-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid rgba(124, 142, 111, 0.18);
+    background: rgba(255, 255, 255, 0.94);
+    border-radius: 16px;
+    padding: 0.78rem 0.92rem;
+    color: #243024;
+    font: inherit;
+  }
+
+  .birdie-input:focus {
+    outline: 2px solid rgba(111, 143, 106, 0.22);
+    outline-offset: 1px;
+    border-color: rgba(111, 143, 106, 0.45);
+  }
 }
 
 @keyframes birdie-pulse {
