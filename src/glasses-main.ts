@@ -109,6 +109,21 @@ function stopAnimLoop(): void {
   }
 }
 
+function renderListeningIfCaptureIsActive(): void {
+  if (isListeningLayoutActive()) {
+    startAnimLoop();
+    return;
+  }
+  if (!isListeningState(stateMachine.getState().type)) return;
+  renderListeningInitial()
+    .then(() => {
+      if (isListeningState(stateMachine.getState().type)) {
+        startAnimLoop();
+      }
+    })
+    .catch((err) => console.error('[birdie] renderListeningInitial failed', err));
+}
+
 async function dismissPopup(): Promise<void> {
   popupSpeciesKey = null;
   popupTextContent = '';
@@ -238,6 +253,7 @@ async function main() {
         birdieStore.setCaptureActive(true);
         birdieStore.resetWaveform();
         waveBuffer.reset();
+        renderListeningIfCaptureIsActive();
         birdieStore.updateDiagnostics({
           lastCaptureStartedAt: Date.now(),
           lastCaptureError: null,
@@ -285,10 +301,10 @@ async function main() {
       s.type === 'LISTENING' || s.type === 'ANALYZING' || s.type === 'DETECTED' || s.type === 'NO_DETECTION';
 
     if (entersListeningLayout && (!lastHudStateType || !isListeningState(lastHudStateType))) {
-      // First entry into listening layout — rebuild once, then run loops.
-      renderListeningInitial()
-        .then(() => startAnimLoop())
-        .catch((err) => console.error('[birdie] renderListeningInitial failed', err));
+      // Draw listening UI only after capture reports that the microphone started.
+      if (birdieStore.getState().isCaptureActive) {
+        renderListeningIfCaptureIsActive();
+      }
     } else if (!entersListeningLayout && lastHudStateType && isListeningState(lastHudStateType)) {
       stopAnimLoop();
       popupSpeciesKey = null;

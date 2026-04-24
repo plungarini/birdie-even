@@ -2,7 +2,10 @@ import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
 import { detectBrowserLocale, resolveSupportedLocale, type SupportedBirdieLocale } from './locale';
 import type { AnalyzeRequestPreferences } from './net/types';
 
+export type BirdieMicrophoneSource = 'g2' | 'phone';
+
 export interface BirdiePreferences {
+	microphoneSource: BirdieMicrophoneSource;
 	threshold: number;
 	sensitivity: number;
 	inferenceIntervalMs: number;
@@ -24,6 +27,7 @@ export interface BirdiePreferencesState {
 type Listener = () => void;
 
 const STORAGE_KEYS = {
+	microphoneSource: 'birdie.preferences.microphoneSource',
 	threshold: 'birdie.preferences.threshold',
 	sensitivity: 'birdie.preferences.sensitivity',
 	inferenceIntervalMs: 'birdie.preferences.inferenceIntervalMs',
@@ -46,6 +50,7 @@ export const preferenceRanges = Object.freeze({
 });
 
 export const defaultBirdiePreferences: BirdiePreferences = Object.freeze({
+	microphoneSource: 'g2',
 	threshold: 0.6,
 	sensitivity: 1,
 	inferenceIntervalMs: 10_000,
@@ -84,6 +89,7 @@ function round(value: number, digits: number): number {
 
 function sanitizePreferences(input: Partial<BirdiePreferences>): BirdiePreferences {
 	return {
+		microphoneSource: input.microphoneSource === 'phone' ? 'phone' : 'g2',
 		threshold: round(
 			clamp(
 				Number(input.threshold ?? defaultBirdiePreferences.threshold),
@@ -147,6 +153,8 @@ function sanitizePreferences(input: Partial<BirdiePreferences>): BirdiePreferenc
 function parseStoredValue<K extends keyof BirdiePreferences>(key: K, raw: string): BirdiePreferences[K] | undefined {
 	if (!raw) return undefined;
 	switch (key) {
+		case 'microphoneSource':
+			return ((raw === 'phone' ? 'phone' : 'g2') as BirdiePreferences[K]);
 		case 'returnAllDetections':
 			return (raw === 'true') as BirdiePreferences[K];
 		case 'locationLat':

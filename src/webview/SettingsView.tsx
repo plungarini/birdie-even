@@ -173,6 +173,23 @@ export function SettingsView() {
           <p className="birdie-section-title">Audio capture</p>
           <Card padding="none" className="birdie-surface-card">
             <div className="birdie-card-body flex flex-col gap-4">
+              <label className="birdie-field">
+                <span className="birdie-setting-label">Microphone source</span>
+                <select
+                  value={preferences.microphoneSource}
+                  onChange={(event) =>
+                    updateBirdiePreferences({
+                      microphoneSource: event.currentTarget.value === 'phone' ? 'phone' : 'g2',
+                    })}
+                  className="birdie-input"
+                >
+                  <option value="g2">G2 glasses microphone</option>
+                  <option value="phone">Phone microphone</option>
+                </select>
+                <span className="birdie-setting-help">
+                  G2 uses the glasses mic through the Even bridge. Phone uses the webview microphone permission on this device.
+                </span>
+              </label>
               <PreferenceSlider
                 label="Inference Interval"
                 description="How often BirdNET analyzes audio. Lower values are more responsive but use more battery."
