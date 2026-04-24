@@ -24,10 +24,9 @@ function bodyForState(state: BirdieHudState): string {
 		case 'IDLE':
 			return [
 				'',
-				centerLine('birdie', BODY_WIDTH),
 				'',
-				centerLine('Ready to listen', BODY_WIDTH),
 				'',
+				centerLine('------•    READY    •------', BODY_WIDTH),
 				centerLine('Tap once to start capture', BODY_WIDTH),
 			].join('\n');
 		case 'LISTENING':
@@ -66,23 +65,6 @@ function bodyForState(state: BirdieHudState): string {
 	}
 }
 
-function footerForState(state: BirdieHudState): string {
-	switch (state.type) {
-		case 'IDLE':
-			return alignRow('tap to listen', 'birdie', BODY_WIDTH);
-		case 'LISTENING':
-			return alignRow('listening live', 'tap to stop', BODY_WIDTH);
-		case 'ANALYZING':
-			return alignRow('uploading clip', 'please wait', BODY_WIDTH);
-		case 'DETECTED':
-			return alignRow('top match shown', 'listening', BODY_WIDTH);
-		case 'NO_DETECTION':
-			return alignRow('no birds yet', 'listening', BODY_WIDTH);
-		case 'ERROR':
-			return alignRow('check diagnostics', state.retryCountdown > 0 ? 'auto retry' : 'tap again', BODY_WIDTH);
-	}
-}
-
 export function renderStaticHud(state: BirdieHudState): HudRenderState {
 	return {
 		layout: LAYOUTS.static,
@@ -90,7 +72,6 @@ export function renderStaticHud(state: BirdieHudState): HudRenderState {
 			shield: ' ',
 			header: alignRow(nowClock(), 'birdie', BODY_WIDTH),
 			body: bodyForState(state),
-			footer: footerForState(state),
 		},
 	};
 }
