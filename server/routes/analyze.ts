@@ -29,11 +29,13 @@ export function registerAnalyzeRoute(app: Hono<{ Bindings: Env }>): void {
 		}
 
 		const file = formData.get('file');
+		const settings = formData.get('settings');
 		console.log('[birdie-proxy] multipart parsed', {
 			hasFile: file instanceof File,
 			fileName: file instanceof File ? file.name : null,
 			fileType: file instanceof File ? file.type : null,
 			fileSize: file instanceof File ? file.size : null,
+			hasSettings: typeof settings === 'string' && settings.length > 0,
 		});
 
 		const controller = new AbortController();

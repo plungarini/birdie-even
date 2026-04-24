@@ -1,5 +1,6 @@
 import type { BirdieHudState } from './hud/types';
 import type { EnrichedDetection } from './net/types';
+import { defaultBirdiePreferences, type BirdiePreferences } from './preferences';
 
 const WAVEFORM_HISTORY_LENGTH = 56;
 
@@ -33,6 +34,7 @@ export interface BirdieStoreState {
   lastRawResponse: unknown;
   waveformPeaks: number[];
   diagnostics: BirdieDiagnostics;
+  preferences: BirdiePreferences;
 }
 
 type Listener = () => void;
@@ -58,6 +60,7 @@ const initialState: BirdieStoreState = {
     lastAnalyzeAt: null,
     lastCaptureError: null,
   },
+  preferences: { ...defaultBirdiePreferences },
 };
 
 let state: BirdieStoreState = { ...initialState };
@@ -197,6 +200,11 @@ export const birdieStore = {
 
   updateDiagnostics: (patch: Partial<BirdieDiagnostics>) => {
     state = { ...state, diagnostics: { ...state.diagnostics, ...patch } };
+    notify();
+  },
+
+  setPreferences: (preferences: BirdiePreferences) => {
+    state = { ...state, preferences };
     notify();
   },
 

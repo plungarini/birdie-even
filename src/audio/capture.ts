@@ -1,5 +1,6 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
 import { config } from '../config';
+import { getBirdiePreferences } from '../preferences';
 import { pcmBuffer } from './buffer';
 import { buildWav } from './wav';
 
@@ -31,6 +32,20 @@ let pendingWaveformPeak = 0;
 let lastWaveformEmitAt = 0;
 
 const WAVEFORM_EMIT_INTERVAL_MS = 84;
+
+function applyMicGain(pcm: Uint8Array, gain: number): Uint8Array {
+  if (gain <= 1.0001) return pcm;
+
+  const out = new Uint8Array(pcm.byteLength);
+  for (let i = 0; i < pcm.byteLength - 1; i += 2) {
+    let sample = pcm[i] | (pcm[i + 1] << 8);
+    if (sample & 0x8000) sample -= 0x10000;
+    const boosted = Math.max(-32768, Math.min(32767, Math.round(sample * gain)));
+    out[i] = boosted & 0xff;
+    out[i + 1] = (boosted >> 8) & 0xff;
+  }
+  return out;
+}
 
 function toUint8Array(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) return value;
@@ -126,6 +141,7 @@ export async function startCapture(): Promise<void> {
   pendingWaveformPeak = 0;
   lastWaveformEmitAt = 0;
   pcmBuffer.clear();
+  const flushIntervalMs = getBirdiePreferences().inferenceIntervalMs;
 
   try {
     await (bridge as unknown as { audioControl: (v: boolean) => Promise<void> }).audioControl(true);
@@ -141,10 +157,12 @@ export async function startCapture(): Promise<void> {
     if (!active || !onFlush) return;
     const pcm = pcmBuffer.flush();
     if (pcm.byteLength === 0) return;
+    const { micGain } = getBirdiePreferences();
+    const preparedPcm = applyMicGain(pcm, micGain);
     onCaptureState?.('flushed', { byteLength: pcm.byteLength });
-    const wav = buildWav(pcm, config.sampleRate, config.channels, config.bitDepth);
+    const wav = buildWav(preparedPcm, config.sampleRate, config.channels, config.bitDepth);
     onFlush(wav);
-  }, config.chunkDurationMs);
+  }, flushIntervalMs);
 }
 
 export async function stopCapture(): Promise<void> {

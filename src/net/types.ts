@@ -12,6 +12,16 @@ export interface AnalyzeResponse {
   error?: string;
 }
 
+export interface AnalyzeRequestPreferences {
+  min_conf: number;
+  sensitivity: number;
+  overlap: number;
+  week_48: number;
+  return_all_detections: boolean;
+  lat: number | null;
+  lon: number | null;
+}
+
 export interface TaxonomyInfo {
   scientific_name: string;
   common_name: string;

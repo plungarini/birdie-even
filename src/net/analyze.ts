@@ -1,11 +1,12 @@
 import { config } from '../config';
-import { AnalyzeError, type AnalyzeResponse, type Detection } from './types';
+import { AnalyzeError, type AnalyzeRequestPreferences, type AnalyzeResponse, type Detection } from './types';
 
 const TIMEOUT_MS = 15_000;
 
-export async function analyze(wavBlob: Blob): Promise<Detection[]> {
+export async function analyze(wavBlob: Blob, preferences: AnalyzeRequestPreferences): Promise<Detection[]> {
   const form = new FormData();
   form.append('file', wavBlob, 'audio.wav');
+  form.append('settings', JSON.stringify(preferences));
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -61,6 +62,6 @@ export async function analyze(wavBlob: Blob): Promise<Detection[]> {
 
   const detections = Array.isArray(body.detections) ? body.detections : [];
   return detections
-    .filter((d) => d.confidence >= config.minConfidence)
+    .filter((d) => d.confidence >= preferences.min_conf)
     .sort((a, b) => b.confidence - a.confidence);
 }
