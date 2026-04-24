@@ -359,7 +359,7 @@ function float32ToPcm16(input: Float32Array, inputSampleRate: number, targetSamp
 
 	const outputLength = Math.floor(merged.length / ratio);
 	if (outputLength <= 0) {
-		phoneResampleBuffer = merged as unknown as Float32Array<ArrayBuffer>;
+		phoneResampleBuffer = merged as unknown as any;
 		return new Uint8Array(0);
 	}
 
