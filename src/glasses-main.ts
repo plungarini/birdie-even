@@ -358,18 +358,16 @@ async function main() {
 
     if (type === OsEventTypeList.FOREGROUND_ENTER_EVENT) {
       console.log('[birdie] foreground enter');
-      shouldKeepListening = false;
-      birdieStore.setCaptureActive(false);
-      stateMachine.onForegroundEnter();
       return;
     }
 
-    if (type === OsEventTypeList.FOREGROUND_EXIT_EVENT || type === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
-      console.log('[birdie] foreground exit / abnormal exit');
-      shouldKeepListening = false;
-      birdieStore.setCaptureActive(false);
-      void stopCapture();
-      stateMachine.onForegroundExit();
+    if (type === OsEventTypeList.FOREGROUND_EXIT_EVENT) {
+      console.log('[birdie] foreground exit');
+      return;
+    }
+
+    if (type === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
+      console.log('[birdie] abnormal exit');
       return;
     }
 
@@ -389,9 +387,10 @@ async function main() {
       return;
     }
 
-    // CLICK_EVENT = 0 may arrive as undefined, but only treat it as a tap
-    // when the event is coming from the text/sys input channel.
-    if (type === OsEventTypeList.CLICK_EVENT || (type === undefined && hasTapCandidate)) {
+    // CLICK_EVENT = 0 may arrive as undefined, but notification/sys events can
+    // also arrive with no usable type. Only bare undefined from text capture is
+    // trusted as a tap.
+    if (type === OsEventTypeList.CLICK_EVENT || (type === undefined && event.textEvent !== undefined && hasTapCandidate)) {
       handleCaptureIntent('toggle');
       return;
     }

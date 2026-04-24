@@ -9,6 +9,12 @@ function requireEnv(key: string): string {
 const workerUrl = requireEnv('VITE_WORKER_URL');
 const normalizedWorkerUrl = workerUrl.replace(/\/+$/, '');
 const useLocalAnalyzeProxy = import.meta.env.DEV;
+const isProdPackMode = import.meta.env.MODE === 'prod';
+
+if (isProdPackMode && /^https?:\/\/(127\.0\.0\.1|localhost)(?::|\/|$)/i.test(normalizedWorkerUrl)) {
+  throw new Error('[birdie] Refusing to package with local VITE_WORKER_URL. Create .env.prod with the deployed worker URL.');
+}
+
 const analyzeUrl = useLocalAnalyzeProxy ? '/analyze' : `${normalizedWorkerUrl}/analyze`;
 const connectionLabel = useLocalAnalyzeProxy ? 'Local dev proxy (/analyze)' : normalizedWorkerUrl;
 const connectionHint = useLocalAnalyzeProxy
