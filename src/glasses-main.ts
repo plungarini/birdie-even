@@ -1,23 +1,39 @@
-import { OsEventTypeList, waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
+import { OsEventTypeList, waitForEvenAppBridge, type EvenAppBridge } from '@evenrealities/even_hub_sdk';
 import { config } from './config';
 import { birdieStore } from './store';
 import { registerCaptureControlHandler } from './control';
-import { HudSession } from './hud/session';
+import { HudSession, LAYOUTS } from './hud/session';
 import { stateMachine } from './hud/state-machine';
-import { renderHudContent } from './hud/render';
+import {
+  buildPopupText,
+  buildWaveContent,
+  renderInitialListeningHud,
+  renderStaticHud,
+} from './hud/render';
+import { WaveformBuffer } from './hud/waveform-buffer';
+import { ANIM_FRAME_MS, POPUP_DURATION_S } from './hud/constants';
+import { generateBlackImageData, loadBirdImageData } from './hud/bird-image';
+import { IMG_H, IMG_W } from './hud/constants';
 import { initCapture, startCapture, stopCapture } from './audio/capture';
-import { analyze } from './net/client';
+import { analyze, enrichSpecies, mergeEnrichment } from './net/client';
 import { AnalyzeError } from './net/types';
 
 let hudSession: HudSession | null = null;
-let renderQueued = false;
-let isRendering = false;
 let analysisInFlight = false;
 let lastHudStateType: string | null = null;
 let hasLoggedFirstAudioPacket = false;
 let lastAudioDiagnosticsAt = 0;
 let captureSessionToken = 0;
 let shouldKeepListening = false;
+
+// Listening-mode loops & state.
+const waveBuffer = new WaveformBuffer();
+let animTick = 0;
+let animTimer: ReturnType<typeof setInterval> | null = null;
+let popupDismissTimer: ReturnType<typeof setTimeout> | null = null;
+let popupVisible = false;
+let popupSpeciesKey: string | null = null;
+let imageContainerClear = true;
 
 function handleCaptureIntent(intent: 'start' | 'stop' | 'toggle' = 'toggle') {
   const currentType = stateMachine.getState().type;
@@ -42,14 +58,6 @@ function getAnalyzeErrorDetails(err: unknown) {
       status: err.status ?? null,
       phase: err.phase ?? 'unknown',
       endpoint: config.analyzeUrl,
-      hint:
-        err.phase === 'fetch'
-          ? 'Check the local Wrangler server, Vite proxy, and device reachability.'
-          : err.phase === 'http'
-            ? 'Inspect the worker response body and upstream BirdNET availability.'
-            : err.phase === 'invalid-json'
-              ? 'The worker responded, but not with valid JSON.'
-              : 'The worker returned an explicit error payload.',
     };
   }
   return {
@@ -57,27 +65,90 @@ function getAnalyzeErrorDetails(err: unknown) {
     status: null,
     phase: 'unknown',
     endpoint: config.analyzeUrl,
-    hint: 'Check Birdie capture, the local server, and network reachability.',
   };
 }
 
-function scheduleRender() {
-  if (!hudSession) return;
-  if (isRendering) { renderQueued = true; return; }
-  isRendering = true;
-  void doRender()
-    .catch((err) => console.error('[birdie] render error', err))
-    .finally(() => {
-      isRendering = false;
-      if (renderQueued) { renderQueued = false; scheduleRender(); }
-    });
+function isListeningLayoutActive(): boolean {
+  return hudSession?.getActiveLayoutKey() === LAYOUTS.listening.key;
 }
 
-async function doRender() {
+async function renderStatic(): Promise<void> {
   if (!hudSession) return;
   const state = stateMachine.getState();
-  const renderState = renderHudContent(state);
-  await hudSession.render(renderState);
+  await hudSession.render(renderStaticHud(state));
+}
+
+async function renderListeningInitial(): Promise<void> {
+  if (!hudSession) return;
+  await hudSession.render(renderInitialListeningHud());
+  // Per SDK docs, image container starts as an invisible placeholder — no initial send needed.
+  imageContainerClear = true;
+}
+
+function startAnimLoop(): void {
+  if (animTimer) return;
+  animTimer = setInterval(() => {
+    if (!hudSession || !isListeningLayoutActive()) return;
+    animTick += 1;
+    const wave = buildWaveContent(animTick, waveBuffer.toArrayTopToBottom());
+    hudSession.upgradeText('wave', wave);
+  }, ANIM_FRAME_MS);
+}
+
+function stopAnimLoop(): void {
+  if (animTimer) {
+    clearInterval(animTimer);
+    animTimer = null;
+  }
+}
+
+function clearPopupDismissTimer(): void {
+  if (popupDismissTimer !== null) {
+    clearTimeout(popupDismissTimer);
+    popupDismissTimer = null;
+  }
+}
+
+async function dismissPopup(): Promise<void> {
+  clearPopupDismissTimer();
+  popupVisible = false;
+  popupSpeciesKey = null;
+  if (!hudSession || !isListeningLayoutActive()) return;
+  hudSession.upgradeText('birdInfo', ' ');
+  if (!imageContainerClear) {
+    const black = await generateBlackImageData(IMG_W, IMG_H);
+    hudSession.upgradeImage('birdImage', black);
+    imageContainerClear = true;
+  }
+}
+
+function schedulePopupDismiss(): void {
+  clearPopupDismissTimer();
+  popupDismissTimer = setTimeout(() => {
+    popupDismissTimer = null;
+    dismissPopup().catch((err) => console.error('[birdie] dismissPopup failed', err));
+  }, POPUP_DURATION_S * 1000);
+}
+
+async function showPopupForKey(key: string): Promise<void> {
+  if (!hudSession || !isListeningLayoutActive()) return;
+  const detection = birdieStore.getState().detectionsByKey[key];
+  if (!detection) return;
+
+  popupSpeciesKey = key;
+  popupVisible = true;
+
+  // Text goes first in the serial queue so it lands before the image.
+  hudSession.upgradeText('birdInfo', buildPopupText(detection));
+  schedulePopupDismiss();
+
+  if (detection.image_url) {
+    const imageData = await loadBirdImageData(detection.image_url);
+    if (imageData && popupSpeciesKey === key && isListeningLayoutActive()) {
+      hudSession.upgradeImage('birdImage', imageData);
+      imageContainerClear = false;
+    }
+  }
 }
 
 async function onWavReady(wav: Blob) {
@@ -93,38 +164,36 @@ async function onWavReady(wav: Blob) {
     lastAnalyzeAt: Date.now(),
   });
   stateMachine.onAnalysisStart();
-  scheduleRender();
 
-  let raw: unknown;
   try {
     console.log('[birdie] analyze start', { wavBytes: wav.size });
     const detections = await analyze(wav);
     if (requestToken !== captureSessionToken || stateMachine.getState().type === 'IDLE') {
-      console.log('[birdie] stale analyze result ignored', { requestToken, captureSessionToken });
+      console.log('[birdie] stale analyze result ignored');
       return;
     }
-    raw = detections;
-    console.log('[birdie] analyze success', { detections: detections.length });
-    stateMachine.onDetections(detections, raw);
+    const uniqueNames = Array.from(new Set(detections.map((d) => d.scientific_name)));
+    const enrichResp = await enrichSpecies(uniqueNames);
+    const enriched = mergeEnrichment(detections, enrichResp);
+    console.log('[birdie] analyze success', { detections: enriched.length });
+    stateMachine.onDetections(enriched, enriched);
   } catch (err) {
     const details = getAnalyzeErrorDetails(err);
-    const msg = details.message;
     if (requestToken !== captureSessionToken || stateMachine.getState().type === 'IDLE') {
-      console.log('[birdie] stale analyze error ignored', { requestToken, captureSessionToken, message: msg });
+      console.log('[birdie] stale analyze error ignored', details);
       return;
     }
     console.error('[birdie] analyze failed', details);
-    stateMachine.onNetworkError(msg);
+    stateMachine.onNetworkError(details.message);
   } finally {
     analysisInFlight = false;
   }
-  scheduleRender();
 }
 
 async function main() {
   console.log('[birdie] glasses layer starting');
 
-  let bridge;
+  let bridge: EvenAppBridge;
   try {
     bridge = await waitForEvenAppBridge();
     console.log('[birdie] bridge acquired');
@@ -140,24 +209,20 @@ async function main() {
     onAudioChunk: (size) => {
       const now = Date.now();
       if (!hasLoggedFirstAudioPacket) {
-        birdieStore.updateDiagnostics({
-          lastAudioPacketAt: now,
-          lastCaptureError: null,
-        });
+        birdieStore.updateDiagnostics({ lastAudioPacketAt: now, lastCaptureError: null });
         console.log('[birdie] first audio packet received', { size });
         hasLoggedFirstAudioPacket = true;
         lastAudioDiagnosticsAt = now;
         return;
       }
       if (now - lastAudioDiagnosticsAt >= 3000) {
-        birdieStore.updateDiagnostics({
-          lastAudioPacketAt: now,
-        });
+        birdieStore.updateDiagnostics({ lastAudioPacketAt: now });
         lastAudioDiagnosticsAt = now;
       }
     },
     onWaveformPeak: (peak) => {
       birdieStore.pushWaveformPeak(peak);
+      waveBuffer.push(peak);
     },
     onCaptureState: (event, details) => {
       if (event === 'started') {
@@ -165,12 +230,12 @@ async function main() {
         lastAudioDiagnosticsAt = 0;
         birdieStore.setCaptureActive(true);
         birdieStore.resetWaveform();
+        waveBuffer.reset();
         birdieStore.updateDiagnostics({
           lastCaptureStartedAt: Date.now(),
           lastCaptureError: null,
           lastAnalyzeStatus: 'capture started',
         });
-        console.log('[birdie] capture started');
         return;
       }
       if (event === 'flushed') {
@@ -182,7 +247,6 @@ async function main() {
           lastFlushBytes: byteLength,
           lastAnalyzeStatus: `flushed ${byteLength}B clip`,
         });
-        console.log('[birdie] capture flushed', { byteLength });
         return;
       }
       if (event === 'stopped') {
@@ -190,7 +254,7 @@ async function main() {
         lastAudioDiagnosticsAt = 0;
         birdieStore.setCaptureActive(false);
         birdieStore.resetWaveform();
-        console.log('[birdie] capture stopped');
+        waveBuffer.reset();
         return;
       }
       if (event === 'capture-error') {
@@ -204,11 +268,29 @@ async function main() {
     },
   });
 
+  // Respond to HUD state changes.
   stateMachine.subscribe(() => {
     const s = stateMachine.getState();
     console.log('[birdie] state transition', { from: lastHudStateType, to: s.type });
     birdieStore.setHudState(s);
-    scheduleRender();
+
+    const entersListeningLayout =
+      s.type === 'LISTENING' || s.type === 'ANALYZING' || s.type === 'DETECTED' || s.type === 'NO_DETECTION';
+
+    if (entersListeningLayout && (!lastHudStateType || !isListeningState(lastHudStateType))) {
+      // First entry into listening layout — rebuild once, then run loops.
+      renderListeningInitial()
+        .then(() => startAnimLoop())
+        .catch((err) => console.error('[birdie] renderListeningInitial failed', err));
+    } else if (!entersListeningLayout && lastHudStateType && isListeningState(lastHudStateType)) {
+      stopAnimLoop();
+      clearPopupDismissTimer();
+      popupVisible = false;
+      popupSpeciesKey = null;
+      renderStatic().catch((err) => console.error('[birdie] renderStatic failed', err));
+    } else if (!entersListeningLayout) {
+      renderStatic().catch((err) => console.error('[birdie] renderStatic failed', err));
+    }
 
     // Start/stop audio capture based on state.
     if (s.type === 'LISTENING' && lastHudStateType !== 'LISTENING') {
@@ -227,20 +309,33 @@ async function main() {
           lastAnalyzeStatus: `capture failed: ${message}`,
         });
         stateMachine.onCaptureError(message);
-        scheduleRender();
       });
     } else if (s.type === 'IDLE' && lastHudStateType !== 'IDLE') {
       captureSessionToken += 1;
       birdieStore.setCaptureActive(false);
       void stopCapture();
     }
+
+    // If DETECTED: surface popup for current top.
+    if (s.type === 'DETECTED') {
+      const key = s.top.scientific_name;
+      if (key === popupSpeciesKey && popupVisible) {
+        // Same species already showing — update heard count text, reset the dismiss timer.
+        if (hudSession && isListeningLayoutActive()) {
+          hudSession.upgradeText('birdInfo', buildPopupText(s.top));
+        }
+        schedulePopupDismiss();
+      } else {
+        // New species (or popup was already dismissed) — full popup with image.
+        showPopupForKey(key).catch((err) => console.error('[birdie] showPopupForKey failed', err));
+      }
+    }
+
     lastHudStateType = s.type;
   });
 
   bridge.onEvenHubEvent((event) => {
-    if ((event as { audioEvent?: unknown }).audioEvent !== undefined) {
-      return;
-    }
+    if ((event as { audioEvent?: unknown }).audioEvent !== undefined) return;
 
     const type = event.textEvent?.eventType ?? event.sysEvent?.eventType;
     const hasTapCandidate = event.textEvent !== undefined || event.sysEvent !== undefined;
@@ -262,6 +357,22 @@ async function main() {
       return;
     }
 
+    // Even Hub submission requirement: root-page double-tap must invoke the
+    // host's exit dialogue via shutDownPageContainer(1). Birdie is a single
+    // root page, so this applies whether listening or idle — stop capture
+    // first so we don't leave the mic hot on exit.
+    if (type === OsEventTypeList.DOUBLE_CLICK_EVENT) {
+      shouldKeepListening = false;
+      captureSessionToken += 1;
+      analysisInFlight = false;
+      birdieStore.setCaptureActive(false);
+      void stopCapture();
+      void bridge.shutDownPageContainer(1).catch((err) =>
+        console.error('[birdie] shutDownPageContainer failed', err),
+      );
+      return;
+    }
+
     // CLICK_EVENT = 0 may arrive as undefined, but only treat it as a tap
     // when the event is coming from the text/sys input channel.
     if (type === OsEventTypeList.CLICK_EVENT || (type === undefined && hasTapCandidate)) {
@@ -270,11 +381,14 @@ async function main() {
     }
   });
 
-  // Kick off initial render — show IDLE on first load.
   stateMachine.onForegroundEnter();
-  scheduleRender();
+  await renderStatic();
 
   console.log('[birdie] glasses layer ready');
+}
+
+function isListeningState(t: string): boolean {
+  return t === 'LISTENING' || t === 'ANALYZING' || t === 'DETECTED' || t === 'NO_DETECTION';
 }
 
 main().catch((err) => console.error('[birdie] fatal error', err));

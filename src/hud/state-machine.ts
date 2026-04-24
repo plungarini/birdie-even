@@ -1,6 +1,6 @@
 import { config } from '../config';
-import { birdieStore } from '../store';
-import type { Detection } from '../net/types';
+import { birdieStore, selectOrderedDetections } from '../store';
+import type { EnrichedDetection } from '../net/types';
 import type { BirdieHudState } from './types';
 
 type Listener = (state: BirdieHudState) => void;
@@ -68,18 +68,23 @@ class BirdieStateMachine {
     }
   }
 
-  onDetections(detections: Detection[], raw: unknown): void {
-    birdieStore.setDetections(detections, raw);
-
+  onDetections(detections: EnrichedDetection[], raw: unknown): void {
     const filtered = detections
       .filter((d) => d.confidence >= config.minConfidence)
       .sort((a, b) => b.confidence - a.confidence);
 
+    birdieStore.recordDetections(filtered, raw);
+
     if (filtered.length > 0) {
-      this.transition({ type: 'DETECTED', detections: filtered });
-    } else {
-      this.transition({ type: 'NO_DETECTION' });
+      const storeState = birdieStore.getState();
+      const latestKey = storeState.latestBirdKey;
+      const top = latestKey ? storeState.detectionsByKey[latestKey] : selectOrderedDetections(storeState)[0];
+      if (top) {
+        this.transition({ type: 'DETECTED', top });
+        return;
+      }
     }
+    this.transition({ type: 'NO_DETECTION' });
   }
 
   onNetworkError(message: string): void {
