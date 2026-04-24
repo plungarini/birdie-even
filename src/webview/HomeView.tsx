@@ -32,33 +32,6 @@ function useStore(): BirdieStoreState {
 
 type BadgeVariant = 'positive' | 'negative' | 'accent' | 'neutral';
 
-const STATE_LABEL: Record<BirdieStoreState['hudStateType'], string> = {
-  IDLE: 'Idle',
-  LISTENING: 'Listening',
-  ANALYZING: 'Analyzing',
-  DETECTED: 'Detected',
-  NO_DETECTION: 'No birds',
-  ERROR: 'Error',
-};
-
-const STATE_BADGE: Record<BirdieStoreState['hudStateType'], BadgeVariant> = {
-  IDLE: 'neutral',
-  LISTENING: 'accent',
-  ANALYZING: 'accent',
-  DETECTED: 'positive',
-  NO_DETECTION: 'neutral',
-  ERROR: 'negative',
-};
-
-const STATE_HINT: Record<BirdieStoreState['hudStateType'], string> = {
-  IDLE: 'Press the G2 side button to start a listening session.',
-  LISTENING: 'Holding the room tone now. Keep the glasses pointed toward birdsong.',
-  ANALYZING: 'BirdNET is identifying the strongest calls in the latest clip.',
-  DETECTED: 'Recognition complete. Press again anytime for another listening pass.',
-  NO_DETECTION: 'Nothing confident enough yet. Try a quieter spot or hold steady for a few seconds.',
-  ERROR: 'The latest pass failed, but Birdie is ready to recover on the next try.',
-};
-
 function pct(confidence: number): string {
   return `${Math.round(confidence * 100)}%`;
 }
@@ -281,17 +254,9 @@ export function HomeView() {
   }
 
   const statusLine =
-    hudStateType === 'DETECTED' && featured
-      ? `${displayCommonName(featured)} · heard ${featured.count}×`
-      : hudStateType === 'LISTENING'
-        ? 'Listening for birdsong'
-        : hudStateType === 'ANALYZING'
-          ? 'Identifying the latest audio clip'
-          : hudStateType === 'NO_DETECTION'
-            ? 'No confident match yet'
-            : hudStateType === 'ERROR'
-              ? 'Session needs a retry'
-              : 'Ready to begin';
+    isCaptureActive
+      ? 'Click to stop a listening session.'
+      : 'Click to start a listening session.';
 
   return (
     <div className="birdie-scroll-panel">
@@ -302,21 +267,14 @@ export function HomeView() {
               <div className="flex min-w-0 flex-col gap-2">
                 <p className="birdie-section-kicker">birdie companion</p>
                 <h2 className="text-[1.9rem] leading-[1.02] tracking-[-0.04em] text-text">
-                  {featured ? displayCommonName(featured) : 'Listen for the next bird.'}
+                  Listen for the next bird.
                 </h2>
-                <p className="text-normal-body text-text-dim">{statusLine}</p>
               </div>
               <div className={isCaptureActive ? 'birdie-hero__pulse' : ''}>
                 <StatusDot connected={isCaptureActive} />
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={STATE_BADGE[hudStateType]} className="birdie-chip">{STATE_LABEL[hudStateType]}</Badge>
-              <Badge variant="neutral" className="birdie-chip">{formatShortRelative(state.lastDetectionsUpdatedAt)}</Badge>
-            </div>
-
-            <p className="max-w-[30ch] text-normal-body leading-snug text-text-dim">{STATE_HINT[hudStateType]}</p>
+            <p className="max-w-[30ch] text-normal-body leading-snug text-text-dim">{statusLine}</p>
 
             <div className="flex flex-col gap-3">
               {isCaptureActive ? <LiveWaveform peaks={waveformPeaks} active={isCaptureActive} /> : null}
