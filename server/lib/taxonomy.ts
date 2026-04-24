@@ -1,11 +1,12 @@
 import { parseCsv } from './csv';
+import { resolveWorkerLocale } from './locales';
 import type { TaxonomyInfo } from '../types';
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 1 week
 const CACHE_NAMESPACE = 'https://cache.birdie.internal/taxonomy/';
 
-function cacheKey(scientificName: string): Request {
-	return new Request(`${CACHE_NAMESPACE}${encodeURIComponent(scientificName)}`);
+function cacheKey(scientificName: string, locale: string): Request {
+	return new Request(`${CACHE_NAMESPACE}${encodeURIComponent(locale)}/${encodeURIComponent(scientificName)}`);
 }
 
 function parseNumber(raw: string): number {
@@ -39,8 +40,9 @@ function rowToTaxonomy(headers: string[], row: string[]): TaxonomyInfo {
 	};
 }
 
-async function fetchFromEbird(scientificName: string, token: string): Promise<TaxonomyInfo | null> {
-	const url = `https://api.ebird.org/v2/ref/taxonomy/ebird?species=${encodeURIComponent(scientificName)}&version=2019`;
+async function fetchFromEbird(scientificName: string, token: string, locale: string): Promise<TaxonomyInfo | null> {
+	const resolvedLocale = resolveWorkerLocale(locale);
+	const url = `https://api.ebird.org/v2/ref/taxonomy/ebird?species=${encodeURIComponent(scientificName)}&version=2019&locale=${encodeURIComponent(resolvedLocale)}`;
 	const res = await fetch(url, {
 		headers: { 'X-eBirdApiToken': token },
 	});
@@ -53,8 +55,9 @@ async function fetchFromEbird(scientificName: string, token: string): Promise<Ta
 	return rowToTaxonomy(rows[0], rows[1]);
 }
 
-export async function fetchTaxonomyCached(scientificName: string, token: string): Promise<TaxonomyInfo | null> {
-	const key = cacheKey(scientificName);
+export async function fetchTaxonomyCached(scientificName: string, token: string, locale: string): Promise<TaxonomyInfo | null> {
+	const resolvedLocale = resolveWorkerLocale(locale);
+	const key = cacheKey(scientificName, resolvedLocale);
 	const cache = (caches as unknown as { default: Cache }).default;
 	const cached = await cache.match(key);
 	if (cached) {
@@ -64,7 +67,7 @@ export async function fetchTaxonomyCached(scientificName: string, token: string)
 			// fall through to refetch
 		}
 	}
-	const fresh = await fetchFromEbird(scientificName, token);
+	const fresh = await fetchFromEbird(scientificName, token, resolvedLocale);
 	const body = JSON.stringify(fresh);
 	const response = new Response(body, {
 		headers: {

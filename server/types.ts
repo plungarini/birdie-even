@@ -28,7 +28,13 @@ export interface EnrichedSpecies {
 	taxonomy: TaxonomyInfo | null;
 }
 
+export interface EnrichRequestBody {
+	species?: unknown;
+	locale?: unknown;
+}
+
 export interface EnrichResponse {
+	locale?: string;
 	results: Record<string, EnrichedSpecies>;
 	errors?: Record<string, string>;
 }
