@@ -1,5 +1,5 @@
 import type { BirdieHudState } from './hud/types';
-import type { Detection } from './net/types';
+import type { EnrichedDetection } from './net/types';
 
 const WAVEFORM_HISTORY_LENGTH = 56;
 
@@ -12,11 +12,22 @@ export interface BirdieDiagnostics {
   lastCaptureError: string | null;
 }
 
+export interface AggregatedDetection extends EnrichedDetection {
+  count: number;
+  firstDetectedAt: number;
+  lastDetectedAt: number;
+  bestConfidence: number;
+}
+
 export interface BirdieStoreState {
   hudStateType: BirdieHudState['type'];
   isListening: boolean;
   isCaptureActive: boolean;
-  lastDetections: Detection[];
+  detectionsByKey: Record<string, AggregatedDetection>;
+  detectionOrder: string[]; // MRU first
+  latestBirdKey: string | null;       // top confidence bird in the last clip (for HUD)
+  latestBirdKeys: string[];           // all birds in the last clip (for webview blimp)
+  latestBirdUpdatedAt: number | null;
   lastDetectionsUpdatedAt: number | null;
   lastError: string | null;
   lastRawResponse: unknown;
@@ -30,7 +41,11 @@ const initialState: BirdieStoreState = {
   hudStateType: 'IDLE',
   isListening: false,
   isCaptureActive: false,
-  lastDetections: [],
+  detectionsByKey: {},
+  detectionOrder: [],
+  latestBirdKey: null,
+  latestBirdKeys: [],
+  latestBirdUpdatedAt: null,
   lastDetectionsUpdatedAt: null,
   lastError: null,
   lastRawResponse: null,
@@ -50,6 +65,10 @@ const listeners = new Set<Listener>();
 
 function notify() {
   for (const l of listeners) l();
+}
+
+function keyOf(d: { scientific_name: string }): string {
+  return d.scientific_name;
 }
 
 export const birdieStore = {
@@ -75,19 +94,91 @@ export const birdieStore = {
     notify();
   },
 
-  setDetections: (detections: Detection[], raw: unknown) => {
+  recordDetections: (detections: EnrichedDetection[], raw: unknown) => {
+    const now = Date.now();
+
+    // Dedupe by scientific_name within this clip, keeping highest confidence.
+    const perClip = new Map<string, EnrichedDetection>();
+    for (const d of detections) {
+      const k = keyOf(d);
+      const prev = perClip.get(k);
+      if (!prev || d.confidence > prev.confidence) perClip.set(k, d);
+    }
+
+    const byKey = { ...state.detectionsByKey };
+    const orderSet = new Set(state.detectionOrder);
+
+    // Most-recent-first: start from MRU birds of this clip (sorted by conf desc).
+    const clipBirds = Array.from(perClip.values()).sort((a, b) => b.confidence - a.confidence);
+
+    let topKey: string | null = null;
+    let topConf = -1;
+
+    for (const d of clipBirds) {
+      const k = keyOf(d);
+      const existing = byKey[k];
+      const merged: AggregatedDetection = existing
+        ? {
+            ...existing,
+            ...d,
+            count: existing.count + 1,
+            firstDetectedAt: existing.firstDetectedAt,
+            lastDetectedAt: now,
+            bestConfidence: Math.max(existing.bestConfidence, d.confidence),
+          }
+        : {
+            ...d,
+            count: 1,
+            firstDetectedAt: now,
+            lastDetectedAt: now,
+            bestConfidence: d.confidence,
+          };
+      byKey[k] = merged;
+      if (d.confidence > topConf) {
+        topConf = d.confidence;
+        topKey = k;
+      }
+    }
+
+    // Build new order: clip birds (highest conf first) at the top, then prior order.
+    const newOrder: string[] = [];
+    const seen = new Set<string>();
+    for (const d of clipBirds) {
+      const k = keyOf(d);
+      if (!seen.has(k)) {
+        newOrder.push(k);
+        seen.add(k);
+      }
+    }
+    for (const k of state.detectionOrder) {
+      if (!seen.has(k) && orderSet.has(k) === false) continue;
+      if (!seen.has(k)) {
+        newOrder.push(k);
+        seen.add(k);
+      }
+    }
+
     state = {
       ...state,
-      lastDetections: detections,
-      lastDetectionsUpdatedAt: Date.now(),
+      detectionsByKey: byKey,
+      detectionOrder: newOrder,
+      latestBirdKey: topKey,
+      latestBirdKeys: clipBirds.map((d) => keyOf(d)),
+      latestBirdUpdatedAt: topKey ? now : state.latestBirdUpdatedAt,
+      lastDetectionsUpdatedAt: now,
       lastRawResponse: raw,
       lastError: null,
       diagnostics: {
         ...state.diagnostics,
-        lastAnalyzeStatus: detections.length > 0 ? 'detections received' : 'no detections returned',
-        lastAnalyzeAt: Date.now(),
+        lastAnalyzeStatus: clipBirds.length > 0 ? 'detections received' : 'no detections returned',
+        lastAnalyzeAt: now,
       },
     };
+    notify();
+  },
+
+  dismissLatestBird: () => {
+    state = { ...state, latestBirdKey: null };
     notify();
   },
 
@@ -105,13 +196,7 @@ export const birdieStore = {
   },
 
   updateDiagnostics: (patch: Partial<BirdieDiagnostics>) => {
-    state = {
-      ...state,
-      diagnostics: {
-        ...state.diagnostics,
-        ...patch,
-      },
-    };
+    state = { ...state, diagnostics: { ...state.diagnostics, ...patch } };
     notify();
   },
 
@@ -132,3 +217,7 @@ export const birdieStore = {
     notify();
   },
 };
+
+export function selectOrderedDetections(s: BirdieStoreState): AggregatedDetection[] {
+  return s.detectionOrder.map((k) => s.detectionsByKey[k]).filter(Boolean);
+}

@@ -68,7 +68,10 @@ function computeChunkPeak(chunk: Uint8Array): number {
     if (normalized > peak) peak = normalized;
   }
 
-  return Math.min(1, Math.sqrt(peak));
+  // Perceptual boost: quiet birdsong often sits around 0.01-0.05 linear peak.
+  // pow(0.33) lifts those into the 0.22-0.40 band so they actually show up
+  // on the waveform while keeping true silence (~0.001) near the floor.
+  return Math.min(1, Math.pow(peak, 0.33));
 }
 
 export function initCapture(
