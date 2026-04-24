@@ -158,7 +158,7 @@ async function onWavReady(wav: Blob) {
       return;
     }
     const uniqueNames = Array.from(new Set(detections.map((d) => d.scientific_name)));
-    const enrichResp = await enrichSpecies(uniqueNames);
+    const enrichResp = await enrichSpecies(uniqueNames, getPreferencesState().values.locale);
     const enriched = mergeEnrichment(detections, enrichResp);
     console.log('[birdie] analyze success', { detections: enriched.length });
     stateMachine.onDetections(enriched, enriched);

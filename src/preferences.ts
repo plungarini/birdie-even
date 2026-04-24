@@ -1,4 +1,5 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
+import { detectBrowserLocale, resolveSupportedLocale, type SupportedBirdieLocale } from './locale';
 import type { AnalyzeRequestPreferences } from './net/types';
 
 export interface BirdiePreferences {
@@ -11,6 +12,7 @@ export interface BirdiePreferences {
 	returnAllDetections: boolean;
 	locationLat: number | null;
 	locationLon: number | null;
+	locale: SupportedBirdieLocale;
 }
 
 export interface BirdiePreferencesState {
@@ -31,6 +33,7 @@ const STORAGE_KEYS = {
 	returnAllDetections: 'birdie.preferences.returnAllDetections',
 	locationLat: 'birdie.preferences.locationLat',
 	locationLon: 'birdie.preferences.locationLon',
+	locale: 'birdie.preferences.locale',
 } satisfies Record<keyof BirdiePreferences, string>;
 
 export const preferenceRanges = Object.freeze({
@@ -52,6 +55,7 @@ export const defaultBirdiePreferences: BirdiePreferences = Object.freeze({
 	returnAllDetections: false,
 	locationLat: null,
 	locationLon: null,
+	locale: 'en_us',
 });
 
 let bridge: EvenAppBridge | null = null;
@@ -136,6 +140,7 @@ function sanitizePreferences(input: Partial<BirdiePreferences>): BirdiePreferenc
 			typeof input.locationLon === 'number' && Number.isFinite(input.locationLon)
 				? round(clamp(input.locationLon, -180, 180), 6)
 				: null,
+		locale: resolveSupportedLocale(input.locale ?? defaultBirdiePreferences.locale),
 	};
 }
 
@@ -149,6 +154,8 @@ function parseStoredValue<K extends keyof BirdiePreferences>(key: K, raw: string
 			const n = Number(raw);
 			return (Number.isFinite(n) ? n : null) as BirdiePreferences[K];
 		}
+		case 'locale':
+			return (raw.trim() ? raw.trim() : undefined) as BirdiePreferences[K];
 		default: {
 			const n = Number(raw);
 			return (Number.isFinite(n) ? n : undefined) as BirdiePreferences[K];
@@ -188,10 +195,14 @@ export async function initPreferences(nextBridge: EvenAppBridge): Promise<void> 
 	}
 
 	hydratePromise = (async () => {
+		let localeWasStored = false;
 		const loaded = await Promise.all(
 			(Object.keys(STORAGE_KEYS) as Array<keyof BirdiePreferences>).map(async (key) => {
 				try {
 					const raw = await nextBridge.getLocalStorage(STORAGE_KEYS[key]);
+					if (key === 'locale' && raw) {
+						localeWasStored = true;
+					}
 					return [key, parseStoredValue(key, raw)] as const;
 				} catch (err) {
 					console.warn('[birdie] preference load failed', { key, err });
@@ -206,12 +217,18 @@ export async function initPreferences(nextBridge: EvenAppBridge): Promise<void> 
 				(partial as Record<keyof BirdiePreferences, BirdiePreferences[keyof BirdiePreferences]>)[key] = value;
 			}
 		}
+		if (partial.locale === undefined) {
+			partial.locale = detectBrowserLocale();
+		}
 
 		state = {
 			values: sanitizePreferences({ ...state.values, ...partial }),
 			hydrated: true,
 			storageReady: true,
 		};
+		if (!localeWasStored) {
+			dirtyKeys.add('locale');
+		}
 		notify();
 	})();
 
@@ -260,5 +277,6 @@ export function getAnalyzeRequestPreferences(): AnalyzeRequestPreferences {
 		return_all_detections: values.returnAllDetections,
 		lat: values.locationLat,
 		lon: values.locationLon,
+		locale: values.locale,
 	};
 }

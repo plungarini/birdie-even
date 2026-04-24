@@ -63,6 +63,10 @@ function confidenceVariant(confidence: number): BadgeVariant {
   return 'neutral';
 }
 
+function displayCommonName(detection: AggregatedDetection): string {
+  return detection.localized_common_name?.trim() || detection.common_name;
+}
+
 const BLIMP_DURATION_MS = 4500;
 
 function LiveWaveform({ peaks, active }: { peaks: number[]; active: boolean }) {
@@ -124,7 +128,7 @@ function DetectionCard({
             />
           ) : null}
           <div className="min-w-0 flex-1">
-            <p className="text-normal-title text-text break-words">{detection.common_name}</p>
+            <p className="text-normal-title text-text break-words">{displayCommonName(detection)}</p>
             <p className="mt-1 text-detail italic text-text-dim break-words">{detection.scientific_name}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant={confidenceVariant(detection.bestConfidence)} className="birdie-chip">
@@ -170,7 +174,7 @@ export function HomeView() {
 
   const statusLine =
     hudStateType === 'DETECTED' && featured
-      ? `${featured.common_name} · heard ${featured.count}×`
+      ? `${displayCommonName(featured)} · heard ${featured.count}×`
       : hudStateType === 'LISTENING'
         ? 'Listening for birdsong'
         : hudStateType === 'ANALYZING'
@@ -190,7 +194,7 @@ export function HomeView() {
               <div className="flex min-w-0 flex-col gap-2">
                 <p className="birdie-section-kicker">birdie companion</p>
                 <h2 className="text-[1.9rem] leading-[1.02] tracking-[-0.04em] text-text">
-                  {featured ? featured.common_name : 'Listen for the next bird.'}
+                  {featured ? displayCommonName(featured) : 'Listen for the next bird.'}
                 </h2>
                 <p className="text-normal-body text-text-dim">{statusLine}</p>
               </div>

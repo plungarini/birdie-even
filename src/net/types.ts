@@ -1,6 +1,7 @@
 // Field names match birdnetlib's recording.detections verbatim.
 export interface Detection {
   common_name: string;
+  localized_common_name?: string;
   scientific_name: string;
   confidence: number;
   start_time: number;
@@ -20,6 +21,7 @@ export interface AnalyzeRequestPreferences {
   return_all_detections: boolean;
   lat: number | null;
   lon: number | null;
+  locale: string;
 }
 
 export interface TaxonomyInfo {
@@ -46,6 +48,7 @@ export interface EnrichedSpecies {
 }
 
 export interface EnrichResponse {
+  locale?: string;
   results: Record<string, EnrichedSpecies>;
   errors?: Record<string, string>;
 }
@@ -53,6 +56,15 @@ export interface EnrichResponse {
 export interface EnrichedDetection extends Detection {
   image_url: string;
   taxonomy: TaxonomyInfo | null;
+}
+
+export interface EnrichRequestBody {
+  species?: unknown;
+  locale?: unknown;
+}
+
+export interface I18nLangsResponse {
+  langs: string[];
 }
 
 export class AnalyzeError extends Error {
