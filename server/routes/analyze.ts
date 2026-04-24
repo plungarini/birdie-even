@@ -1,6 +1,91 @@
 import type { Hono } from 'hono';
 import { corsHeaders } from '../lib/cors';
-import type { Env } from '../types';
+import { buildBirdImageUrl } from '../lib/bird-image';
+import { resolveWorkerLocale } from '../lib/locales';
+import { fetchTaxonomyCached } from '../lib/taxonomy';
+import type { Env, TaxonomyInfo } from '../types';
+
+interface UpstreamDetection {
+	common_name?: unknown;
+	scientific_name?: unknown;
+	confidence?: unknown;
+	start_time?: unknown;
+	end_time?: unknown;
+}
+
+interface EnrichedDetectionPayload {
+	common_name: string;
+	scientific_name: string;
+	confidence: number;
+	start_time: number;
+	end_time: number;
+	localized_common_name: string;
+	image_url: string;
+	taxonomy: TaxonomyInfo | null;
+}
+
+function extractLocaleFromSettings(raw: FormDataEntryValue | null): string | undefined {
+	if (typeof raw !== 'string' || !raw) return undefined;
+	try {
+		const parsed = JSON.parse(raw) as { locale?: unknown };
+		return typeof parsed.locale === 'string' ? parsed.locale : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function toDetection(raw: UpstreamDetection): EnrichedDetectionPayload | null {
+	const scientific = typeof raw.scientific_name === 'string' ? raw.scientific_name.trim() : '';
+	if (!scientific) return null;
+	const common = typeof raw.common_name === 'string' ? raw.common_name : '';
+	const confidence = typeof raw.confidence === 'number' ? raw.confidence : Number(raw.confidence);
+	const startTime = typeof raw.start_time === 'number' ? raw.start_time : Number(raw.start_time);
+	const endTime = typeof raw.end_time === 'number' ? raw.end_time : Number(raw.end_time);
+	return {
+		common_name: common,
+		scientific_name: scientific,
+		confidence: Number.isFinite(confidence) ? confidence : 0,
+		start_time: Number.isFinite(startTime) ? startTime : 0,
+		end_time: Number.isFinite(endTime) ? endTime : 0,
+		localized_common_name: common,
+		image_url: '',
+		taxonomy: null,
+	};
+}
+
+async function enrichDetections(
+	detections: EnrichedDetectionPayload[],
+	token: string,
+	locale: string,
+): Promise<void> {
+	// Dedupe by scientific_name so each species hits taxonomy (and the cache) once.
+	const uniqueNames = Array.from(new Set(detections.map((d) => d.scientific_name)));
+	const byName = new Map<string, TaxonomyInfo | null>();
+
+	await Promise.all(
+		uniqueNames.map(async (sci) => {
+			try {
+				const taxonomy = await fetchTaxonomyCached(sci, token, locale);
+				byName.set(sci, taxonomy);
+			} catch (err) {
+				console.warn('[birdie-proxy] taxonomy lookup failed', {
+					scientific_name: sci,
+					locale,
+					error: err instanceof Error ? err.message : String(err),
+				});
+				byName.set(sci, null);
+			}
+		}),
+	);
+
+	for (const d of detections) {
+		const taxonomy = byName.get(d.scientific_name) ?? null;
+		d.taxonomy = taxonomy;
+		d.image_url = buildBirdImageUrl(d.scientific_name);
+		const localized = taxonomy?.common_name?.trim();
+		if (localized) d.localized_common_name = localized;
+	}
+}
 
 export function registerAnalyzeRoute(app: Hono<{ Bindings: Env }>): void {
 	app.options('/analyze', (c) => {
@@ -30,12 +115,14 @@ export function registerAnalyzeRoute(app: Hono<{ Bindings: Env }>): void {
 
 		const file = formData.get('file');
 		const settings = formData.get('settings');
+		const locale = resolveWorkerLocale(extractLocaleFromSettings(settings));
 		console.log('[birdie-proxy] multipart parsed', {
 			hasFile: file instanceof File,
 			fileName: file instanceof File ? file.name : null,
 			fileType: file instanceof File ? file.type : null,
 			fileSize: file instanceof File ? file.size : null,
 			hasSettings: typeof settings === 'string' && settings.length > 0,
+			locale,
 		});
 
 		const controller = new AbortController();
@@ -79,15 +166,37 @@ export function registerAnalyzeRoute(app: Hono<{ Bindings: Env }>): void {
 			return c.json({ detections: [], error: 'upstream returned invalid JSON' }, 502, corsHeaders(origin));
 		}
 
+		const rawDetections =
+			typeof json === 'object' && json !== null && Array.isArray((json as { detections?: unknown[] }).detections)
+				? ((json as { detections: UpstreamDetection[] }).detections)
+				: [];
+
+		const detections = rawDetections
+			.map(toDetection)
+			.filter((d): d is EnrichedDetectionPayload => d !== null);
+
+		try {
+			await enrichDetections(detections, c.env.EBIRD_API_TOKEN, locale);
+		} catch (err) {
+			console.warn('[birdie-proxy] enrichment batch failed (continuing with base detections)', {
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+
+		const responseBody = {
+			...(typeof json === 'object' && json !== null ? (json as Record<string, unknown>) : {}),
+			detections,
+			locale,
+		};
+
 		console.log('[birdie-proxy] POST /analyze success', {
 			durationMs: Date.now() - requestStartedAt,
-			detections:
-				typeof json === 'object' && json !== null && Array.isArray((json as { detections?: unknown[] }).detections)
-					? (json as { detections: unknown[] }).detections.length
-					: null,
+			detections: detections.length,
+			locale,
+			enrichedCount: detections.filter((d) => d.taxonomy !== null).length,
 			hasErrorField: typeof json === 'object' && json !== null && 'error' in json,
 		});
 
-		return c.json(json, 200, corsHeaders(origin));
+		return c.json(responseBody, 200, corsHeaders(origin));
 	});
 }
