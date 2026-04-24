@@ -46,7 +46,7 @@ export function renderStaticHud(state: BirdieHudState): HudRenderState {
 	return {
 		layout: LAYOUTS.static,
 		textContents: {
-			shield: ' ',
+			eventCapture: ' ',
 			header: alignRow(nowClock(), 'birdie', BODY_WIDTH),
 			body: bodyForState(state),
 		},
@@ -56,7 +56,7 @@ export function renderStaticHud(state: BirdieHudState): HudRenderState {
 // Initial contents for the listening layout — wave column and empty popup.
 export function initialListeningContents(): Record<string, string> {
 	return {
-		shield: ' ',
+		eventCapture: ' ',
 		wave: buildWaveContent(
 			0,
 			Array.from({ length: 8 }, () => 0),

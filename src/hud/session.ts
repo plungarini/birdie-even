@@ -12,21 +12,27 @@ import {
 import { HUD_CONTENT_CHAR_LIMIT, HUD_HEIGHT, HUD_WIDTH, IMG_H, IMG_W, INFO_GAP, LISTEN_SLIM_W } from './constants';
 import type { HudLayoutDescriptor, HudRenderState } from './types';
 
-// Default (IDLE / non-listening) layout — header + body with shield capture.
+// Invisible full-size shadow event-capture container. Declared first so it
+// sits below the visible content (containerID 0). The Even Hub host requires
+// exactly one container with isEventCapture: 1; by keeping it empty and
+// borderless it doesn't draw anything on the HUD.
+const SHADOW_CAPTURE = {
+	containerID: 0,
+	containerName: 'eventCapture',
+	xPosition: 0,
+	yPosition: 0,
+	width: HUD_WIDTH,
+	height: HUD_HEIGHT,
+	paddingLength: 0,
+	borderWidth: 0,
+	isEventCapture: 1,
+} as const;
+
+// Default (IDLE / non-listening) layout — shadow capture + header + body.
 const STATIC_LAYOUT: HudLayoutDescriptor = {
 	key: 'birdie.static.v1',
 	textDescriptors: [
-		{
-			containerID: 0,
-			containerName: 'shield',
-			xPosition: 0,
-			yPosition: 0,
-			width: HUD_WIDTH,
-			height: HUD_HEIGHT,
-			borderWidth: 0,
-			paddingLength: 0,
-			isEventCapture: 1,
-		},
+		SHADOW_CAPTURE,
 		{
 			containerID: 1,
 			containerName: 'header',
@@ -53,21 +59,11 @@ const STATIC_LAYOUT: HudLayoutDescriptor = {
 	],
 };
 
-// Listening layout — wave column, bird info text, bird image. Shield captures taps+scrolls.
+// Listening layout — shadow capture + wave column + bird info text + image.
 const LISTENING_LAYOUT: HudLayoutDescriptor = {
   key: 'birdie.listening.v1',
   textDescriptors: [
-    {
-      containerID: 0,
-			containerName: 'shield',
-			xPosition: 0,
-			yPosition: 0,
-			width: HUD_WIDTH,
-			height: HUD_HEIGHT,
-			borderWidth: 0,
-			paddingLength: 0,
-			isEventCapture: 1,
-    },
+    SHADOW_CAPTURE,
     {
       containerID: 10,
       containerName: 'wave',
