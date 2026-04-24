@@ -1,7 +1,7 @@
 import { IMG_H, IMG_W } from './constants';
 
 const FETCH_TIMEOUT_MS = 8000;
-const CORNER_RADIUS = 10;
+const CORNER_RADIUS = 14;
 const BRIGHTNESS = 0.78;
 const CONTRAST = 1.32;
 const GAMMA = 1.12;
@@ -112,6 +112,8 @@ function renderToPngBytes(img: HTMLImageElement): Promise<number[] | null> {
     g = Math.max(0, Math.min(255, Math.round(g)));
     d[i] = g; d[i + 1] = g; d[i + 2] = g;
   }
+
+  applyRoundedMask(d, IMG_W, IMG_H, CORNER_RADIUS);
   ctx.putImageData(imageData, 0, 0);
 
   return new Promise((resolve) => {
@@ -122,6 +124,55 @@ function renderToPngBytes(img: HTMLImageElement): Promise<number[] | null> {
         .catch((err) => { console.error('[birdie] arrayBuffer failed', err); resolve(null); });
     }, 'image/png');
   });
+}
+
+function applyRoundedMask(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const pixelIndex = (y * width + x) * 4;
+      const outsideOuter = !isInsideRoundedRect(x + 0.5, y + 0.5, 0, 0, width, height, radius);
+
+      if (outsideOuter) {
+        data[pixelIndex] = 0;
+        data[pixelIndex + 1] = 0;
+        data[pixelIndex + 2] = 0;
+      }
+    }
+  }
+}
+
+function isInsideRoundedRect(
+  x: number,
+  y: number,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+  radius: number,
+): boolean {
+  if (x < left || x >= right || y < top || y >= bottom) {
+    return false;
+  }
+
+  const innerLeft = left + radius;
+  const innerRight = right - radius;
+  const innerTop = top + radius;
+  const innerBottom = bottom - radius;
+
+  if ((x >= innerLeft && x < innerRight) || (y >= innerTop && y < innerBottom)) {
+    return true;
+  }
+
+  const cx = x < innerLeft ? innerLeft : innerRight;
+  const cy = y < innerTop ? innerTop : innerBottom;
+  const dx = x - cx;
+  const dy = y - cy;
+  return dx * dx + dy * dy <= radius * radius;
 }
 
 // Solid black PNG bytes for clearing the image container.
