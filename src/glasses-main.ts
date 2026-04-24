@@ -1,5 +1,11 @@
 import { OsEventTypeList, waitForEvenAppBridge, type EvenAppBridge } from '@evenrealities/even_hub_sdk';
 import { config } from './config';
+import {
+  getAnalyzeRequestPreferences,
+  getPreferencesState,
+  initPreferences,
+  subscribePreferences,
+} from './preferences';
 import { birdieStore } from './store';
 import { registerCaptureControlHandler } from './control';
 import { HudSession, LAYOUTS } from './hud/session';
@@ -11,7 +17,7 @@ import {
   renderStaticHud,
 } from './hud/render';
 import { WaveformBuffer } from './hud/waveform-buffer';
-import { ANIM_FRAME_MS, POPUP_DURATION_S } from './hud/constants';
+import { ANIM_FRAME_MS } from './hud/constants';
 import { generateBlackImageData, loadBirdImageData } from './hud/bird-image';
 import { IMG_H, IMG_W } from './hud/constants';
 import { initCapture, startCapture, stopCapture } from './audio/capture';
@@ -30,8 +36,6 @@ let shouldKeepListening = false;
 const waveBuffer = new WaveformBuffer();
 let animTick = 0;
 let animTimer: ReturnType<typeof setInterval> | null = null;
-let popupDismissTimer: ReturnType<typeof setTimeout> | null = null;
-let popupVisible = false;
 let popupSpeciesKey: string | null = null;
 let imageContainerClear = true;
 
@@ -102,16 +106,7 @@ function stopAnimLoop(): void {
   }
 }
 
-function clearPopupDismissTimer(): void {
-  if (popupDismissTimer !== null) {
-    clearTimeout(popupDismissTimer);
-    popupDismissTimer = null;
-  }
-}
-
 async function dismissPopup(): Promise<void> {
-  clearPopupDismissTimer();
-  popupVisible = false;
   popupSpeciesKey = null;
   if (!hudSession || !isListeningLayoutActive()) return;
   hudSession.upgradeText('birdInfo', ' ');
@@ -122,25 +117,15 @@ async function dismissPopup(): Promise<void> {
   }
 }
 
-function schedulePopupDismiss(): void {
-  clearPopupDismissTimer();
-  popupDismissTimer = setTimeout(() => {
-    popupDismissTimer = null;
-    dismissPopup().catch((err) => console.error('[birdie] dismissPopup failed', err));
-  }, POPUP_DURATION_S * 1000);
-}
-
 async function showPopupForKey(key: string): Promise<void> {
   if (!hudSession || !isListeningLayoutActive()) return;
   const detection = birdieStore.getState().detectionsByKey[key];
   if (!detection) return;
 
   popupSpeciesKey = key;
-  popupVisible = true;
 
   // Text goes first in the serial queue so it lands before the image.
   hudSession.upgradeText('birdInfo', buildPopupText(detection));
-  schedulePopupDismiss();
 
   if (detection.image_url) {
     const imageData = await loadBirdImageData(detection.image_url);
@@ -167,7 +152,7 @@ async function onWavReady(wav: Blob) {
 
   try {
     console.log('[birdie] analyze start', { wavBytes: wav.size });
-    const detections = await analyze(wav);
+    const detections = await analyze(wav, getAnalyzeRequestPreferences());
     if (requestToken !== captureSessionToken || stateMachine.getState().type === 'IDLE') {
       console.log('[birdie] stale analyze result ignored');
       return;
@@ -203,6 +188,11 @@ async function main() {
   }
 
   hudSession = new HudSession(bridge);
+  await initPreferences(bridge);
+  birdieStore.setPreferences(getPreferencesState().values);
+  subscribePreferences(() => {
+    birdieStore.setPreferences(getPreferencesState().values);
+  });
   registerCaptureControlHandler(handleCaptureIntent);
   birdieStore.setCaptureActive(false);
   initCapture(bridge, onWavReady, {
@@ -284,8 +274,6 @@ async function main() {
         .catch((err) => console.error('[birdie] renderListeningInitial failed', err));
     } else if (!entersListeningLayout && lastHudStateType && isListeningState(lastHudStateType)) {
       stopAnimLoop();
-      clearPopupDismissTimer();
-      popupVisible = false;
       popupSpeciesKey = null;
       renderStatic().catch((err) => console.error('[birdie] renderStatic failed', err));
     } else if (!entersListeningLayout) {
@@ -319,16 +307,17 @@ async function main() {
     // If DETECTED: surface popup for current top.
     if (s.type === 'DETECTED') {
       const key = s.top.scientific_name;
-      if (key === popupSpeciesKey && popupVisible) {
-        // Same species already showing — update heard count text, reset the dismiss timer.
+      if (key === popupSpeciesKey) {
+        // Same species already showing — refresh the metadata inline.
         if (hudSession && isListeningLayoutActive()) {
           hudSession.upgradeText('birdInfo', buildPopupText(s.top));
         }
-        schedulePopupDismiss();
       } else {
-        // New species (or popup was already dismissed) — full popup with image.
+        // New species — replace the current popup with the new detection.
         showPopupForKey(key).catch((err) => console.error('[birdie] showPopupForKey failed', err));
       }
+    } else if (s.type === 'NO_DETECTION' && popupSpeciesKey !== null) {
+      dismissPopup().catch((err) => console.error('[birdie] dismissPopup failed', err));
     }
 
     lastHudStateType = s.type;

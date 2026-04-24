@@ -1,8 +1,9 @@
 import { config } from '../config';
+import { preferenceRanges } from '../preferences';
 
 // At 16 kHz, mono, 16-bit: 1 second = 32,000 bytes.
 const BYTES_PER_SECOND = (config.sampleRate * config.channels * config.bitDepth) / 8;
-const MAX_BUFFER_BYTES = (config.maxChunkDurationMs / 1000) * BYTES_PER_SECOND;
+const MAX_BUFFER_BYTES = (preferenceRanges.inferenceIntervalMs.max / 1000) * BYTES_PER_SECOND;
 
 const chunks: Uint8Array[] = [];
 let totalBytes = 0;

@@ -18,7 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
 
 const PAGE_SUBTITLES: Record<string, string> = {
   '/': 'Bird recognition companion',
-  '/settings': 'Capture, analysis, and diagnostics',
+  '/settings': 'Preferences, location, and diagnostics',
 };
 
 interface TabDef {

@@ -1,6 +1,13 @@
-import { Badge, Button, Card } from 'even-toolkit/web';
-import { useSyncExternalStore } from 'react';
+import { Button, Card } from 'even-toolkit/web';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { config } from '../config';
+import {
+  clearBirdieLocation,
+  getPreferencesState,
+  preferenceRanges,
+  subscribePreferences,
+  updateBirdiePreferences,
+} from '../preferences';
 import { birdieStore } from '../store';
 import { LogsPanel } from './LogsView';
 
@@ -8,18 +15,76 @@ function useStore() {
   return useSyncExternalStore(birdieStore.subscribe, birdieStore.getState, birdieStore.getState);
 }
 
+function usePreferencesState() {
+  return useSyncExternalStore(subscribePreferences, getPreferencesState, getPreferencesState);
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatSeconds(valueMs: number): string {
+  return `${Math.round(valueMs / 1000)}s`;
+}
+
+function formatCoordinate(value: number | null): string {
+  return value === null ? 'Unset' : value.toFixed(4);
+}
+
+function PreferenceSlider({
+  label,
+  description,
+  value,
+  min,
+  max,
+  step,
+  displayValue,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  displayValue: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="birdie-setting-group">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="birdie-setting-label">{label}</p>
+          <p className="birdie-setting-help">{description}</p>
+        </div>
+        <span className="birdie-setting-value">{displayValue}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        className="birdie-slider"
+      />
+    </div>
+  );
+}
+
 export function SettingsView() {
   const state = useStore();
+  const { values: preferences } = usePreferencesState();
   const diagnostics = state.diagnostics;
-  const connectionVariant =
-    state.hudStateType === 'ERROR'
-      ? 'negative'
-      : state.isListening
-        ? 'accent'
-        : 'positive';
-  const lastClipLabel = state.lastDetectionsUpdatedAt
-    ? new Date(state.lastDetectionsUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : 'None yet';
+  const [locationStatus, setLocationStatus] = useState<string | null>(null);
+  const [latInput, setLatInput] = useState(preferences.locationLat?.toFixed(6) ?? '');
+  const [lonInput, setLonInput] = useState(preferences.locationLon?.toFixed(6) ?? '');
+
+  useEffect(() => {
+    setLatInput(preferences.locationLat?.toFixed(6) ?? '');
+    setLonInput(preferences.locationLon?.toFixed(6) ?? '');
+  }, [preferences.locationLat, preferences.locationLon]);
+
   const lastCaptureLabel = diagnostics.lastCaptureStartedAt
     ? new Date(diagnostics.lastCaptureStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'Never';
@@ -27,158 +92,229 @@ export function SettingsView() {
     ? new Date(diagnostics.lastAudioPacketAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'No packets';
 
+  async function requestCurrentLocation() {
+    if (!navigator.geolocation) {
+      setLocationStatus('Location is not available in this webview.');
+      return;
+    }
+
+    setLocationStatus('Requesting current location…');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        updateBirdiePreferences({
+          locationLat: position.coords.latitude,
+          locationLon: position.coords.longitude,
+        });
+        setLocationStatus('Saved current location for future BirdNET requests.');
+      },
+      (error) => {
+        setLocationStatus(error.message || 'Location permission was denied or unavailable.');
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    );
+  }
+
+  function updateManualLatitude(raw: string) {
+    setLatInput(raw);
+    if (raw.trim() === '') {
+      updateBirdiePreferences({ locationLat: null });
+      return;
+    }
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      updateBirdiePreferences({ locationLat: value });
+    }
+  }
+
+  function updateManualLongitude(raw: string) {
+    setLonInput(raw);
+    if (raw.trim() === '') {
+      updateBirdiePreferences({ locationLon: null });
+      return;
+    }
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      updateBirdiePreferences({ locationLon: value });
+    }
+  }
+
   return (
     <div className="birdie-scroll-panel">
       <div className="flex flex-col gap-5 pb-6">
-        <Card padding="none" className="birdie-surface-card">
-          <div className="birdie-card-body flex flex-col gap-4">
-            <div className="min-w-0">
-              <p className="birdie-section-kicker">BirdNET session</p>
-              <h2 className="mt-2 text-[1.8rem] leading-[1.04] tracking-[-0.04em] text-text">Birdie is tuned for short, repeatable listening passes.</h2>
-              <p className="mt-3 text-normal-body text-text-dim">
-                The glasses handle capture locally, then BirdNET scores the latest clip against your configured endpoint.
+        <section className="flex flex-col gap-3">
+          <p className="birdie-section-title">Audio capture</p>
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body flex flex-col gap-4">
+              <PreferenceSlider
+                label="Inference Interval"
+                description="How often BirdNET analyzes audio. Lower values are more responsive but use more battery."
+                value={preferences.inferenceIntervalMs}
+                min={preferenceRanges.inferenceIntervalMs.min}
+                max={preferenceRanges.inferenceIntervalMs.max}
+                step={preferenceRanges.inferenceIntervalMs.step}
+                displayValue={formatSeconds(preferences.inferenceIntervalMs)}
+                onChange={(value) => updateBirdiePreferences({ inferenceIntervalMs: value })}
+              />
+              <PreferenceSlider
+                label="Mic Gain"
+                description="Digital volume boost before upload. Use it if the microphone sounds too quiet."
+                value={preferences.micGain}
+                min={preferenceRanges.micGain.min}
+                max={preferenceRanges.micGain.max}
+                step={preferenceRanges.micGain.step}
+                displayValue={`${preferences.micGain.toFixed(1)}×`}
+                onChange={(value) => updateBirdiePreferences({ micGain: value })}
+              />
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                <div className="birdie-setting-mini">
+                  <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Sample rate</p>
+                  <p className="mt-2 text-normal-title text-text">{config.sampleRate / 1000}kHz</p>
+                </div>
+                <div className="birdie-setting-mini">
+                  <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Channels</p>
+                  <p className="mt-2 text-normal-title text-text">{config.channels === 1 ? 'Mono' : String(config.channels)}</p>
+                </div>
+                <div className="birdie-setting-mini">
+                  <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Bit depth</p>
+                  <p className="mt-2 text-normal-title text-text">{config.bitDepth}-bit</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <p className="birdie-section-title">Analysis thresholds</p>
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body flex flex-col gap-4">
+              <PreferenceSlider
+                label="Threshold"
+                description="Minimum confidence score required to show a detection."
+                value={preferences.threshold}
+                min={preferenceRanges.threshold.min}
+                max={preferenceRanges.threshold.max}
+                step={preferenceRanges.threshold.step}
+                displayValue={formatPercent(preferences.threshold)}
+                onChange={(value) => updateBirdiePreferences({ threshold: value })}
+              />
+              <PreferenceSlider
+                label="Sensitivity"
+                description="Higher sensitivity detects more birds but may increase false positives."
+                value={preferences.sensitivity}
+                min={preferenceRanges.sensitivity.min}
+                max={preferenceRanges.sensitivity.max}
+                step={preferenceRanges.sensitivity.step}
+                displayValue={preferences.sensitivity.toFixed(2)}
+                onChange={(value) => updateBirdiePreferences({ sensitivity: value })}
+              />
+            </div>
+          </Card>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <p className="birdie-section-title">Location</p>
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="birdie-setting-mini">
+                  <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Latitude</p>
+                  <p className="mt-2 text-normal-title text-text">{formatCoordinate(preferences.locationLat)}</p>
+                </div>
+                <div className="birdie-setting-mini">
+                  <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Longitude</p>
+                  <p className="mt-2 text-normal-title text-text">{formatCoordinate(preferences.locationLon)}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="default" onClick={requestCurrentLocation} className="birdie-quiet-button">
+                  Use current location
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    clearBirdieLocation();
+                    setLocationStatus('Cleared saved coordinates.');
+                  }}
+                  className="birdie-quiet-button"
+                >
+                  Clear location
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="birdie-field">
+                  <span className="birdie-setting-label">Manual latitude</span>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    min="-90"
+                    max="90"
+                    value={latInput}
+                    onChange={(event) => updateManualLatitude(event.currentTarget.value)}
+                    className="birdie-input"
+                    placeholder="e.g. 44.4949"
+                  />
+                </label>
+                <label className="birdie-field">
+                  <span className="birdie-setting-label">Manual longitude</span>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    min="-180"
+                    max="180"
+                    value={lonInput}
+                    onChange={(event) => updateManualLongitude(event.currentTarget.value)}
+                    className="birdie-input"
+                    placeholder="e.g. 11.3426"
+                  />
+                </label>
+              </div>
+              <p className="text-detail text-text-dim">
+                {locationStatus ?? 'Location is optional. Birdie will still analyze clips when coordinates are unset.'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={connectionVariant} className="birdie-chip">
-                {state.hudStateType.toLowerCase()}
-              </Badge>
-              <span className="text-detail text-text-dim">
-                {state.isCaptureActive ? 'Capture is active on the glasses.' : 'Waiting for the next listening pass.'}
-              </span>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </section>
 
-      <section className="flex flex-col gap-3">
-        <p className="birdie-section-title">BirdNET session</p>
-        <div className="grid grid-cols-2 gap-3">
+        <section className="flex flex-col gap-3">
+          <p className="birdie-section-title">Diagnostics</p>
           <Card padding="none" className="birdie-surface-card">
-            <div className="birdie-card-body">
-            <p className="text-detail uppercase tracking-[0.24em] text-text-dim">Capture state</p>
-            <p className="mt-2 text-normal-title text-text">{state.isCaptureActive ? 'Listening live' : 'Waiting'}</p>
-            </div>
-          </Card>
-          <Card padding="none" className="birdie-surface-card">
-            <div className="birdie-card-body">
-            <p className="text-detail uppercase tracking-[0.24em] text-text-dim">Last clip</p>
-            <p className="mt-2 text-normal-title text-text">{lastClipLabel}</p>
-            </div>
-          </Card>
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <p className="birdie-section-title">Audio capture</p>
-        <div className="grid grid-cols-3 gap-3">
-          <Card padding="none" className="birdie-surface-card">
-            <div className="birdie-card-body">
-            <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Sample rate</p>
-            <p className="mt-2 text-normal-title text-text">{config.sampleRate / 1000}kHz</p>
-            </div>
-          </Card>
-          <Card padding="none" className="birdie-surface-card">
-            <div className="birdie-card-body">
-            <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Channels</p>
-            <p className="mt-2 text-normal-title text-text">{config.channels === 1 ? 'Mono' : String(config.channels)}</p>
-            </div>
-          </Card>
-          <Card padding="none" className="birdie-surface-card">
-            <div className="birdie-card-body">
-            <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Bit depth</p>
-            <p className="mt-2 text-normal-title text-text">{config.bitDepth}-bit</p>
-            </div>
-          </Card>
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <p className="birdie-section-title">Analysis thresholds</p>
-        <Card padding="none" className="birdie-surface-card">
-          <div className="birdie-card-body grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-3">
+            <div className="birdie-card-body grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Chunk duration</p>
-                <p className="mt-2 text-normal-title text-text">{config.chunkDurationMs / 1000}s per request</p>
+                <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Last error</p>
+                <p className="mt-2 text-normal-body text-text">
+                  {state.lastError ?? 'No recent BirdNET or network errors.'}
+                </p>
               </div>
-              <div className="flex items-center justify-between gap-4 text-normal-body">
-                <span className="text-text-dim">Minimum clip</span>
-                <span className="text-text">{config.minChunkDurationMs / 1000}s</span>
+              <div>
+                <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Analyze status</p>
+                <p className="mt-2 text-normal-body text-text">
+                  {diagnostics.lastAnalyzeStatus ?? 'Waiting for first capture.'}
+                </p>
               </div>
-              <div className="flex items-center justify-between gap-4 text-normal-body">
-                <span className="text-text-dim">Maximum clip</span>
-                <span className="text-text">{config.maxChunkDurationMs / 1000}s</span>
+              <div>
+                <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Capture started</p>
+                <p className="mt-2 text-normal-body text-text">{lastCaptureLabel}</p>
+              </div>
+              <div>
+                <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Last audio packet</p>
+                <p className="mt-2 text-normal-body text-text">{lastPacketLabel}</p>
+              </div>
+              <div>
+                <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Last flush size</p>
+                <p className="mt-2 text-normal-body text-text">
+                  {diagnostics.lastFlushBytes !== null ? `${diagnostics.lastFlushBytes} B` : 'No flush yet'}
+                </p>
+              </div>
+              <div>
+                <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Capture issue</p>
+                <p className="mt-2 text-normal-body text-text">
+                  {diagnostics.lastCaptureError ?? 'No microphone errors recorded.'}
+                </p>
               </div>
             </div>
-            <div className="rounded-[20px] border border-border-light bg-white/55 px-4 py-4">
-              <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Minimum confidence</p>
-              <p className="mt-2 text-[2.2rem] leading-none tracking-[-0.05em] text-text">
-                {Math.round(config.minConfidence * 100)}%
-              </p>
-              <p className="mt-2 text-detail text-text-dim">
-                Lower values are more permissive; higher values reduce uncertain matches.
-              </p>
-            </div>
-          </div>
-        </Card>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <p className="birdie-section-title">Connection</p>
-        <Card padding="none" className="birdie-surface-card">
-          <div className="birdie-card-body flex flex-col gap-2">
-            <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Endpoint</p>
-            <p className="text-normal-body font-mono break-all text-text">{config.connectionLabel}</p>
-            <p className="text-detail text-text-dim">
-              {config.connectionHint}
-            </p>
-          </div>
-        </Card>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <p className="birdie-section-title">Diagnostics</p>
-        <Card padding="none" className="birdie-surface-card">
-          <div className="birdie-card-body grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Last error</p>
-              <p className="mt-2 text-normal-body text-text">
-                {state.lastError ?? 'No recent BirdNET or network errors.'}
-              </p>
-            </div>
-            <div>
-              <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Analyze status</p>
-              <p className="mt-2 text-normal-body text-text">
-                {diagnostics.lastAnalyzeStatus ?? 'Waiting for first capture.'}
-              </p>
-            </div>
-            <div>
-              <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Capture started</p>
-              <p className="mt-2 text-normal-body text-text">{lastCaptureLabel}</p>
-            </div>
-            <div>
-              <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Last audio packet</p>
-              <p className="mt-2 text-normal-body text-text">{lastPacketLabel}</p>
-            </div>
-            <div>
-              <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Last flush size</p>
-              <p className="mt-2 text-normal-body text-text">
-                {diagnostics.lastFlushBytes !== null ? `${diagnostics.lastFlushBytes} B` : 'No flush yet'}
-              </p>
-            </div>
-            <div>
-              <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Capture issue</p>
-              <p className="mt-2 text-normal-body text-text">
-                {diagnostics.lastCaptureError ?? 'No microphone errors recorded.'}
-              </p>
-            </div>
-            <Button variant="default" disabled className="birdie-quiet-button sm:col-span-2">
-              Live logs below
-            </Button>
-          </div>
-        </Card>
-        <LogsPanel />
-      </section>
+          </Card>
+          <LogsPanel />
+        </section>
       </div>
     </div>
   );

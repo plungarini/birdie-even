@@ -1,4 +1,4 @@
-import { config } from '../config';
+import { getBirdiePreferences } from '../preferences';
 import { birdieStore, selectOrderedDetections } from '../store';
 import type { EnrichedDetection } from '../net/types';
 import type { BirdieHudState } from './types';
@@ -69,8 +69,9 @@ class BirdieStateMachine {
   }
 
   onDetections(detections: EnrichedDetection[], raw: unknown): void {
+    const minConfidence = getBirdiePreferences().threshold;
     const filtered = detections
-      .filter((d) => d.confidence >= config.minConfidence)
+      .filter((d) => d.confidence >= minConfidence)
       .sort((a, b) => b.confidence - a.confidence);
 
     birdieStore.recordDetections(filtered, raw);
