@@ -1,5 +1,5 @@
 // Loader animation — one glyph per tick, cycles forever.
-export const ANIM_FRAMES = ['◤', '◥', '◢', '◣', '█', '▣', '□', '■', '█'] as const;
+export const ANIM_FRAMES = ['█', '▣', '□', '■', '█'] as const;
 
 export function animGlyph(tick: number): string {
 	return ANIM_FRAMES[((tick % ANIM_FRAMES.length) + ANIM_FRAMES.length) % ANIM_FRAMES.length];
@@ -15,7 +15,7 @@ const WAVE_THRESHOLDS: Array<[number, string]> = [
 	[0.52, '▌'],
 	[0.65, '▋'],
 	[0.78, '▊'],
-	[0.90, '▉'],
+	[0.9, '▉'],
 	[1.01, '█'],
 ];
 
