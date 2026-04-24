@@ -55,10 +55,10 @@ const STATIC_LAYOUT: HudLayoutDescriptor = {
 
 // Listening layout — wave column, bird info text, bird image. Shield captures taps+scrolls.
 const LISTENING_LAYOUT: HudLayoutDescriptor = {
-	key: 'birdie.listening.v1',
-	textDescriptors: [
-		{
-			containerID: 0,
+  key: 'birdie.listening.v1',
+  textDescriptors: [
+    {
+      containerID: 0,
 			containerName: 'shield',
 			xPosition: 0,
 			yPosition: 0,
@@ -67,37 +67,37 @@ const LISTENING_LAYOUT: HudLayoutDescriptor = {
 			borderWidth: 0,
 			paddingLength: 0,
 			isEventCapture: 1,
-		},
-		{
-			containerID: 1,
-			containerName: 'wave',
-			xPosition: 0,
-			yPosition: 0,
-			width: LISTEN_SLIM_W,
+    },
+    {
+      containerID: 10,
+      containerName: 'wave',
+      xPosition: 0,
+      yPosition: 0,
+      width: LISTEN_SLIM_W,
 			height: HUD_HEIGHT,
 			paddingLength: 2,
 			borderWidth: 0,
 			isEventCapture: 0,
-		},
-		{
-			containerID: 2,
-			containerName: 'birdInfo',
-			xPosition: LISTEN_SLIM_W + INFO_GAP,
-			yPosition: 0,
-			width: HUD_WIDTH - LISTEN_SLIM_W - INFO_GAP - IMG_W,
+    },
+    {
+      containerID: 11,
+      containerName: 'birdInfo',
+      xPosition: LISTEN_SLIM_W + INFO_GAP,
+      yPosition: 0,
+      width: HUD_WIDTH - LISTEN_SLIM_W - INFO_GAP - IMG_W,
 			height: HUD_HEIGHT,
 			paddingLength: 6,
 			borderWidth: 0,
 			isEventCapture: 0,
 		},
 	],
-	imageDescriptors: [
-		{
-			containerID: 3,
-			containerName: 'birdImage',
-			xPosition: HUD_WIDTH - IMG_W,
-			yPosition: Math.floor((HUD_HEIGHT - IMG_H) / 2),
-			width: IMG_W,
+  imageDescriptors: [
+    {
+      containerID: 12,
+      containerName: 'birdImage',
+      xPosition: HUD_WIDTH - IMG_W,
+      yPosition: Math.floor((HUD_HEIGHT - IMG_H) / 2),
+      width: IMG_W,
 			height: IMG_H,
 		},
 	],
