@@ -277,6 +277,45 @@
     background: rgba(255, 247, 247, 0.94);
   }
 
+  .birdie-copy-icon-button {
+    width: 2.35rem;
+    height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    border: 1px solid rgba(124, 142, 111, 0.18);
+    background: rgba(247, 250, 242, 0.96);
+    color: #566653;
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease,
+      transform 180ms ease;
+  }
+
+  .birdie-copy-icon-button:hover:not(:disabled) {
+    background: rgba(238, 244, 232, 0.98);
+    color: #243024;
+  }
+
+  .birdie-copy-icon-button:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .birdie-copy-icon-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .birdie-copy-icon-button--copied {
+    border-color: rgba(75, 156, 114, 0.34);
+    background: linear-gradient(180deg, rgba(223, 244, 230, 0.98), rgba(206, 236, 216, 0.98));
+    color: #1f6c4a;
+    animation: birdie-copy-pop 0.3s ease;
+  }
+
   .birdie-log-card {
     border: 1px solid rgba(124, 142, 111, 0.12);
     border-radius: 16px;
@@ -498,6 +537,20 @@
 
   70% {
     border-color: rgba(91, 110, 172, 0.78);
+  }
+}
+
+@keyframes birdie-copy-pop {
+  0% {
+    transform: scale(0.9);
+  }
+
+  65% {
+    transform: scale(1.06);
+  }
+
+  100% {
+    transform: scale(1);
   }
 }
 

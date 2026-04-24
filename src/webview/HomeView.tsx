@@ -7,6 +7,25 @@ import type { AggregatedDetection, BirdieStoreState } from '../store';
 type SvgIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 const IcBird = allIcons['feat-message'] as SvgIcon;
 
+function GlobeIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.9 9h16.2" />
+      <path d="M3.9 15h16.2" />
+      <path d="M12 3.5c2.5 2.2 4 5.2 4 8.5s-1.5 6.3-4 8.5c-2.5-2.2-4-5.2-4-8.5s1.5-6.3 4-8.5Z" />
+    </svg>
+  );
+}
+
+function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m6.5 12.5 3.4 3.4 7.6-8.1" />
+    </svg>
+  );
+}
+
 function useStore(): BirdieStoreState {
   return useSyncExternalStore(birdieStore.subscribe, birdieStore.getState, birdieStore.getState);
 }
@@ -67,6 +86,27 @@ function displayCommonName(detection: AggregatedDetection): string {
   return detection.localized_common_name?.trim() || detection.common_name;
 }
 
+function buildBirdDetailsUrl(detection: AggregatedDetection): string | null {
+  const speciesCode = detection.taxonomy?.species_code?.trim();
+  if (!speciesCode) return null;
+  return `https://ebird.org/species/${encodeURIComponent(speciesCode)}`;
+}
+
+function copyTextWithExecCommand(text: string): boolean {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.pointerEvents = 'none';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  const successful = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  return successful;
+}
+
 const BLIMP_DURATION_MS = 4500;
 
 function LiveWaveform({ peaks, active }: { peaks: number[]; active: boolean }) {
@@ -109,10 +149,37 @@ function LiveWaveform({ peaks, active }: { peaks: number[]; active: boolean }) {
 function DetectionCard({
   detection,
   isBlimping,
+  onCopyUrl,
 }: {
   detection: AggregatedDetection;
   isBlimping: boolean;
+  onCopyUrl: (detection: AggregatedDetection) => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<number | null>(null);
+  const birdUrl = buildBirdDetailsUrl(detection);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current !== null) {
+        window.clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function handleCopyClick() {
+    if (!birdUrl) return;
+    onCopyUrl(detection);
+    setCopied(true);
+    if (copiedTimeoutRef.current !== null) {
+      window.clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = window.setTimeout(() => {
+      setCopied(false);
+      copiedTimeoutRef.current = null;
+    }, 1800);
+  }
+
   return (
     <Card padding="none" className={`birdie-surface-card ${isBlimping ? 'birdie-card--blimp' : ''}`}>
       <div className="birdie-card-body">
@@ -138,6 +205,16 @@ function DetectionCard({
               <Badge variant="neutral" className="birdie-chip">{formatShortRelative(detection.lastDetectedAt)}</Badge>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={handleCopyClick}
+            disabled={!birdUrl}
+            aria-label={birdUrl ? 'Copy bird details URL' : 'Bird details URL unavailable'}
+            title={birdUrl ? 'Copy bird details URL' : 'Bird details URL unavailable'}
+            className={`birdie-copy-icon-button ${copied ? 'birdie-copy-icon-button--copied' : ''}`}
+          >
+            {copied ? <CheckIcon width={18} height={18} /> : <GlobeIcon width={18} height={18} />}
+          </button>
         </div>
       </div>
     </Card>
@@ -154,6 +231,8 @@ export function HomeView() {
   // Reactive blimp set — keys pulse for BLIMP_DURATION_MS then are cleared.
   const [blimpingKeys, setBlimpingKeys] = useState<ReadonlySet<string>>(new Set());
   const blimpTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [toast, setToast] = useState('');
+  const toastTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!latestBirdKeys.length || !latestBirdUpdatedAt) return;
@@ -171,6 +250,35 @@ export function HomeView() {
       }, BLIMP_DURATION_MS));
     }
   }, [latestBirdKeys, latestBirdUpdatedAt]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current !== null) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function showToast(message: string) {
+    setToast(message);
+    if (toastTimeoutRef.current !== null) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast('');
+      toastTimeoutRef.current = null;
+    }, 2200);
+  }
+
+  function handleCopyBirdUrl(detection: AggregatedDetection) {
+    const url = buildBirdDetailsUrl(detection);
+    if (!url) {
+      showToast('Bird details URL unavailable');
+      return;
+    }
+    const copied = copyTextWithExecCommand(url);
+    showToast(copied ? 'Copied bird details URL' : 'Copy failed');
+  }
 
   const statusLine =
     hudStateType === 'DETECTED' && featured
@@ -257,11 +365,27 @@ export function HomeView() {
                 key={d.scientific_name}
                 detection={d}
                 isBlimping={blimpingKeys.has(d.scientific_name)}
+                onCopyUrl={handleCopyBirdUrl}
               />
             ))}
           </section>
         ) : null}
       </div>
+
+      {toast && (
+        <div className="fixed bottom-24 left-4 right-4 z-50">
+          <div className="birdie-surface-card birdie-card-body text-center">
+            <p className="birdie-section-title">{toast}</p>
+            <p className="mt-1 text-detail text-text-dim">
+              {toast === 'Copied bird details URL'
+                ? 'An eBird species page link is now on the clipboard.'
+                : toast === 'Bird details URL unavailable'
+                  ? 'This bird has no resolved eBird species code yet.'
+                  : 'Birdie could not copy the current eBird details link.'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
