@@ -1,6 +1,6 @@
 {
 	"author": "Pietro Lungarini",
-	"description": "Real-time bird identification for Even Realities G2. Listens through the mic, sends audio to BirdNET, and shows detected species on the HUD.",
+	"description": "Real-time bird identification for Even Realities Glasses. Listens through the mic, sends audio to BirdNET, and shows detected species on the HUD.",
 	"edition": "202601",
 	"entrypoint": "index.html",
 	"min_app_version": "2.1.1",
@@ -27,5 +27,5 @@
 	],
 	"supported_languages": ["en"],
 	"tagline": "Hear a bird? Know it instantly.",
-	"version": "0.1.3"
+	"version": "0.3.0"
 }
