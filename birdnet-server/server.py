@@ -12,7 +12,12 @@ app = FastAPI()
 analyzer = Analyzer()
 
 API_KEY = os.environ.get("BIRDNET_API_KEY")
-DEFAULT_MIN_CONF = 0.25
+
+# Fixed detection floor used for birdnetlib — intentionally low so all
+# candidates reach the client, which applies the user's display threshold.
+# The client's min_conf setting is NOT forwarded to birdnetlib.
+BIRDNET_FLOOR = 0.1
+
 DEFAULT_WEEK_48 = -1
 DEFAULT_SENSITIVITY = 1.0
 DEFAULT_OVERLAP = 0.0
@@ -113,7 +118,7 @@ async def analyze(file: UploadFile, settings: str = Form(""), x_api_key: str = H
         lon = parse_float(parsed_settings.get("lon"))
         recording_kwargs = {
             "week_48": parse_int(parsed_settings.get("week_48"), DEFAULT_WEEK_48),
-            "min_conf": parse_float(parsed_settings.get("min_conf"), DEFAULT_MIN_CONF),
+            "min_conf": BIRDNET_FLOOR,
             "sensitivity": parse_float(parsed_settings.get("sensitivity"), DEFAULT_SENSITIVITY),
             "overlap": parse_float(parsed_settings.get("overlap"), DEFAULT_OVERLAP),
             "return_all_detections": parse_bool(

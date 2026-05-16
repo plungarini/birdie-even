@@ -66,7 +66,5 @@ export async function analyze(wavBlob: Blob, preferences: AnalyzeRequestPreferen
   if (body.error) throw new AnalyzeError(body.error, res.status, 'worker-error');
 
   const detections = Array.isArray(body.detections) ? body.detections : [];
-  return detections
-    .filter((d) => d.confidence >= preferences.min_conf)
-    .sort((a, b) => b.confidence - a.confidence);
+  return detections.sort((a, b) => b.confidence - a.confidence);
 }

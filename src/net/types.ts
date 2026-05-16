@@ -15,7 +15,6 @@ export interface AnalyzeResponse {
 }
 
 export interface AnalyzeRequestPreferences {
-  min_conf: number;
   sensitivity: number;
   overlap: number;
   week_48: number;

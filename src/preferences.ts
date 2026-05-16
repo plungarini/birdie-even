@@ -185,7 +185,11 @@ async function flushDirtyKeys(): Promise<void> {
 		keys.map(async (key) => {
 			const value = serializeStoredValue(state.values[key]);
 			try {
-				await bridge!.setLocalStorage(STORAGE_KEYS[key], value);
+				const ok = await bridge!.setLocalStorage(STORAGE_KEYS[key], value);
+				if (!ok) {
+					console.warn('[birdie] preference persist returned false', { key });
+					dirtyKeys.add(key);
+				}
 			} catch (err) {
 				console.warn('[birdie] preference persist failed', { key, err });
 				dirtyKeys.add(key);
@@ -278,7 +282,6 @@ export function clearBirdieLocation(): void {
 export function getAnalyzeRequestPreferences(): AnalyzeRequestPreferences {
 	const values = getBirdiePreferences();
 	return {
-		min_conf: values.threshold,
 		sensitivity: values.sensitivity,
 		overlap: values.overlap,
 		week_48: values.week48,
