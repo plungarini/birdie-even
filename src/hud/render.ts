@@ -80,9 +80,11 @@ export function buildWaveContent(tick: number, peaksTopToBottom: number[]): stri
 	return lines.join('\n');
 }
 
-export function buildPopupText(detection: AggregatedDetection): string {
+export function buildPopupText(detection: AggregatedDetection, isNew = false): string {
 	const common = displayCommonName(detection).slice(0, 40);
 	const sci = `- ${detection.scientific_name}`.slice(0, 42);
-	const meta = `${pct(detection.bestConfidence)} · ${detection.count}x`;
+	const meta = isNew
+		? `✦ NEW · ${pct(detection.bestConfidence)} · ${detection.count}x`
+		: `${pct(detection.bestConfidence)} · ${detection.count}x`;
 	return ['\n\n', common, sci, '', meta].join('\n');
 }

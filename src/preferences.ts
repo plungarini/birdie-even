@@ -16,6 +16,7 @@ export interface BirdiePreferences {
 	locationLat: number | null;
 	locationLon: number | null;
 	locale: SupportedBirdieLocale;
+	keepEmptySessions: boolean;
 }
 
 export interface BirdiePreferencesState {
@@ -38,6 +39,7 @@ const STORAGE_KEYS = {
 	locationLat: 'birdie.preferences.locationLat',
 	locationLon: 'birdie.preferences.locationLon',
 	locale: 'birdie.preferences.locale',
+	keepEmptySessions: 'birdie.preferences.keepEmptySessions',
 } satisfies Record<keyof BirdiePreferences, string>;
 
 export const preferenceRanges = Object.freeze({
@@ -61,6 +63,7 @@ export const defaultBirdiePreferences: BirdiePreferences = Object.freeze({
 	locationLat: null,
 	locationLon: null,
 	locale: 'en_us',
+	keepEmptySessions: false,
 });
 
 let bridge: EvenAppBridge | null = null;
@@ -147,6 +150,7 @@ function sanitizePreferences(input: Partial<BirdiePreferences>): BirdiePreferenc
 				? round(clamp(input.locationLon, -180, 180), 6)
 				: null,
 		locale: resolveSupportedLocale(input.locale ?? defaultBirdiePreferences.locale),
+		keepEmptySessions: Boolean(input.keepEmptySessions ?? defaultBirdiePreferences.keepEmptySessions),
 	};
 }
 
@@ -156,6 +160,7 @@ function parseStoredValue<K extends keyof BirdiePreferences>(key: K, raw: string
 		case 'microphoneSource':
 			return ((raw === 'phone' ? 'phone' : 'g2') as BirdiePreferences[K]);
 		case 'returnAllDetections':
+		case 'keepEmptySessions':
 			return (raw === 'true') as BirdiePreferences[K];
 		case 'locationLat':
 		case 'locationLon': {
