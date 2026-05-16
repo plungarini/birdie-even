@@ -278,7 +278,6 @@ export function clearBirdieLocation(): void {
 export function getAnalyzeRequestPreferences(): AnalyzeRequestPreferences {
 	const values = getBirdiePreferences();
 	return {
-		min_conf: values.threshold,
 		sensitivity: values.sensitivity,
 		overlap: values.overlap,
 		week_48: values.week48,
