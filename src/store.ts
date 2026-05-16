@@ -28,6 +28,7 @@ export interface BirdieStoreState {
   detectionOrder: string[]; // MRU first
   latestBirdKey: string | null;       // top confidence bird in the last clip (for HUD)
   latestBirdKeys: string[];           // all birds in the last clip (for webview blimp)
+  latestNewKeys: string[];            // lifetime-new species detected in the last clip
   latestBirdUpdatedAt: number | null;
   lastDetectionsUpdatedAt: number | null;
   lastError: string | null;
@@ -47,6 +48,7 @@ const initialState: BirdieStoreState = {
   detectionOrder: [],
   latestBirdKey: null,
   latestBirdKeys: [],
+  latestNewKeys: [],
   latestBirdUpdatedAt: null,
   lastDetectionsUpdatedAt: null,
   lastError: null,
@@ -177,6 +179,11 @@ export const birdieStore = {
         lastAnalyzeAt: now,
       },
     };
+    notify();
+  },
+
+  setLatestNewKeys: (keys: string[]) => {
+    state = { ...state, latestNewKeys: keys };
     notify();
   },
 

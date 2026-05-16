@@ -8,8 +8,17 @@ import { buildPopupText, buildWaveContent, renderInitialListeningHud, renderStat
 import { HudSession, LAYOUTS } from './hud/session';
 import { stateMachine } from './hud/state-machine';
 import { WaveformBuffer } from './hud/waveform-buffer';
+import {
+	beginSession as journalBeginSession,
+	endSession as journalEndSession,
+	getJournalIndex,
+	initJournalRepository,
+	isNewToday,
+	isSessionActive as journalIsActive,
+	recordDetections as journalRecordDetections,
+} from './journal';
 import { analyze } from './net/client';
-import { AnalyzeError } from './net/types';
+import { AnalyzeError, type EnrichedDetection } from './net/types';
 import {
 	getAnalyzeRequestPreferences,
 	getPreferencesState,
@@ -142,7 +151,11 @@ async function showOrRefreshPopupForKey(key: string): Promise<void> {
 	const detection = birdieStore.getState().detectionsByKey[key];
 	if (!detection) return;
 
-	const nextText = buildPopupText(detection);
+	const lifeEntry = getJournalIndex().lifeList[detection.scientific_name];
+	const isNew =
+		birdieStore.getState().latestNewKeys.includes(detection.scientific_name) ||
+		isNewToday(lifeEntry?.firstIdentifiedAt ?? detection.firstDetectedAt);
+	const nextText = buildPopupText(detection, isNew);
 	if (popupSpeciesKey === key) {
 		// Same bird: only refresh the text content so the heard count/confidence can change.
 		upgradePopupText(nextText);
@@ -184,6 +197,14 @@ async function onWavReady(wav: Blob) {
 			return;
 		}
 		console.log('[birdie] analyze success', { detections: detections.length });
+		const threshold = birdieStore.getState().preferences.threshold;
+		const filtered: EnrichedDetection[] = detections.filter((d) => d.confidence >= threshold);
+		if (journalIsActive() && filtered.length > 0) {
+			const result = journalRecordDetections(filtered);
+			birdieStore.setLatestNewKeys(result.newSpeciesKeys);
+		} else {
+			birdieStore.setLatestNewKeys([]);
+		}
 		stateMachine.onDetections(detections, detections);
 	} catch (err) {
 		const details = getAnalyzeErrorDetails(err);
@@ -212,6 +233,7 @@ async function main() {
 
 	hudSession = new HudSession(bridge);
 	await initPreferences(bridge);
+	await initJournalRepository(bridge);
 	birdieStore.setPreferences(getPreferencesState().values);
 	subscribePreferences(() => {
 		birdieStore.setPreferences(getPreferencesState().values);
@@ -244,6 +266,7 @@ async function main() {
 				birdieStore.setCaptureActive(true);
 				birdieStore.resetWaveform();
 				waveBuffer.reset();
+				if (!journalIsActive()) journalBeginSession();
 				renderListeningIfCaptureIsActive();
 				birdieStore.updateDiagnostics({
 					lastCaptureStartedAt: Date.now(),
@@ -269,11 +292,23 @@ async function main() {
 				birdieStore.setCaptureActive(false);
 				birdieStore.resetWaveform();
 				waveBuffer.reset();
+				if (journalIsActive()) {
+					void journalEndSession().catch((err) =>
+						console.error('[birdie] journal endSession failed', err),
+					);
+				}
+				birdieStore.setLatestNewKeys([]);
 				return;
 			}
 			if (event === 'capture-error') {
 				const message = details instanceof Error ? details.message : String(details);
 				birdieStore.setCaptureActive(false);
+				if (journalIsActive()) {
+					void journalEndSession().catch((err) =>
+						console.error('[birdie] journal endSession failed (error path)', err),
+					);
+				}
+				birdieStore.setLatestNewKeys([]);
 				birdieStore.updateDiagnostics({
 					lastCaptureError: message,
 					lastAnalyzeStatus: `capture error: ${message}`,
