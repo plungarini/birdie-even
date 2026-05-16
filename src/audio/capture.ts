@@ -40,6 +40,7 @@ let onFlush: FlushCallback | null = null;
 let onAudioChunk: AudioChunkCallback | null = null;
 let onCaptureState: CaptureStateCallback | null = null;
 let onWaveformPeak: WaveformCallback | null = null;
+let unsubscribeEvenHubEvent: (() => void) | null = null;
 let firstAudioEventLogged = false;
 let pendingWaveformPeak = 0;
 let lastWaveformEmitAt = 0;
@@ -118,13 +119,14 @@ export function initCapture(
 		onWaveformPeak?: WaveformCallback;
 	},
 ): void {
+	unsubscribeEvenHubEvent?.();
 	bridge = b;
 	onFlush = flushCb;
 	onAudioChunk = hooks?.onAudioChunk ?? null;
 	onCaptureState = hooks?.onCaptureState ?? null;
 	onWaveformPeak = hooks?.onWaveformPeak ?? null;
 
-	b.onEvenHubEvent((event) => {
+	unsubscribeEvenHubEvent = b.onEvenHubEvent((event) => {
 		// Log the first raw audio event once to confirm field layout at runtime.
 		if (!firstAudioEventLogged && (event as { audioEvent?: unknown }).audioEvent !== undefined) {
 			console.log(
@@ -169,7 +171,7 @@ export async function startCapture(): Promise<void> {
 		if (activeSource === 'phone') {
 			await startPhoneCapture();
 		} else {
-			await (bridge as unknown as { audioControl: (v: boolean) => Promise<void> }).audioControl(true);
+			await bridge!.audioControl(true);
 		}
 		onCaptureState?.('started');
 	} catch (err) {
@@ -215,7 +217,7 @@ export async function stopCapture(): Promise<void> {
 		if (sourceToStop === 'phone') {
 			await stopPhoneCapture();
 		} else {
-			await (bridge as unknown as { audioControl: (v: boolean) => Promise<void> }).audioControl(false);
+			await bridge!.audioControl(false);
 		}
 		onCaptureState?.('stopped');
 	} catch (err) {
