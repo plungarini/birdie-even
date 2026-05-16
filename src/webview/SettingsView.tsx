@@ -1,6 +1,7 @@
 import { Button, Card } from 'even-toolkit/web';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { config } from '../config';
+import { clearJournal, getJournalState, subscribeJournal } from '../journal';
 import { getLocaleLabel, resolveSupportedLocale } from '../locale';
 import type { I18nLangsResponse } from '../net/types';
 import {
@@ -19,6 +20,10 @@ function useStore() {
 
 function usePreferencesState() {
   return useSyncExternalStore(subscribePreferences, getPreferencesState, getPreferencesState);
+}
+
+function useJournal() {
+  return useSyncExternalStore(subscribeJournal, getJournalState, getJournalState);
 }
 
 function formatPercent(value: number): string {
@@ -77,7 +82,9 @@ function PreferenceSlider({
 export function SettingsView() {
   const state = useStore();
   const { values: preferences } = usePreferencesState();
+  const journal = useJournal();
   const diagnostics = state.diagnostics;
+  const [journalStatus, setJournalStatus] = useState<string | null>(null);
   const [localeOptions, setLocaleOptions] = useState<string[]>(['en_us']);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
   const [latInput, setLatInput] = useState(preferences.locationLat?.toFixed(6) ?? '');
@@ -341,6 +348,58 @@ export function SettingsView() {
                   Birdie localizes common names from eBird taxonomy. Scientific names always stay unchanged.
                 </span>
               </label>
+            </div>
+          </Card>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <p className="birdie-section-title">Journal</p>
+          <Card padding="none" className="birdie-surface-card">
+            <div className="birdie-card-body flex flex-col gap-4">
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="birdie-setting-label">Keep empty sessions</p>
+                  <p className="birdie-setting-help">
+                    By default, sessions with no detections are discarded on Stop. Turn this on to save them anyway.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferences.keepEmptySessions}
+                  onChange={(event) =>
+                    updateBirdiePreferences({ keepEmptySessions: event.currentTarget.checked })
+                  }
+                  className="mt-1 h-5 w-5 cursor-pointer"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="birdie-setting-mini">
+                  <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Sessions saved</p>
+                  <p className="mt-2 text-normal-title text-text">{journal.index.sessionIds.length}</p>
+                </div>
+                <div className="birdie-setting-mini">
+                  <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Life list size</p>
+                  <p className="mt-2 text-normal-title text-text">{Object.keys(journal.index.lifeList).length}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    const ok = window.confirm(
+                      'Erase all saved sessions and your life list? This cannot be undone.',
+                    );
+                    if (!ok) return;
+                    void clearJournal().then(() => setJournalStatus('Journal cleared.'));
+                  }}
+                  className="birdie-quiet-button"
+                >
+                  Clear journal
+                </Button>
+              </div>
+              {journalStatus ? (
+                <p className="text-detail text-text-dim">{journalStatus}</p>
+              ) : null}
             </div>
           </Card>
         </section>
