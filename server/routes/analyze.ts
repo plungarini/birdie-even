@@ -3,7 +3,9 @@ import { corsHeaders } from '../lib/cors';
 import { buildBirdImageUrl } from '../lib/bird-image';
 import { resolveWorkerLocale } from '../lib/locales';
 import { fetchTaxonomyCached } from '../lib/taxonomy';
-import type { Env, TaxonomyInfo } from '../types';
+import { searchInatTaxonId, fetchInatObservations } from '../lib/inaturalist';
+import { computeRarityFromObservations } from '../lib/rarity';
+import type { Env, RarityTier, TaxonomyInfo } from '../types';
 
 interface UpstreamDetection {
 	common_name?: unknown;
@@ -22,6 +24,7 @@ interface EnrichedDetectionPayload {
 	localized_common_name: string;
 	image_url: string;
 	taxonomy: TaxonomyInfo | null;
+	rarity: { tier: RarityTier; localCount90d: number } | null;
 }
 
 function extractLocaleFromSettings(raw: FormDataEntryValue | null): string | undefined {
@@ -31,6 +34,19 @@ function extractLocaleFromSettings(raw: FormDataEntryValue | null): string | und
 		return typeof parsed.locale === 'string' ? parsed.locale : undefined;
 	} catch {
 		return undefined;
+	}
+}
+
+function extractPositionFromSettings(raw: FormDataEntryValue | null): { lat: number; lng: number } | null {
+	if (typeof raw !== 'string' || !raw) return null;
+	try {
+		const parsed = JSON.parse(raw) as { lat?: unknown; lon?: unknown };
+		const lat = typeof parsed.lat === 'number' && Number.isFinite(parsed.lat) ? parsed.lat : null;
+		const lng = typeof parsed.lon === 'number' && Number.isFinite(parsed.lon) ? parsed.lon : null;
+		if (lat !== null && lng !== null) return { lat, lng };
+		return null;
+	} catch {
+		return null;
 	}
 }
 
@@ -50,6 +66,7 @@ function toDetection(raw: UpstreamDetection): EnrichedDetectionPayload | null {
 		localized_common_name: common,
 		image_url: '',
 		taxonomy: null,
+		rarity: null,
 	};
 }
 
@@ -84,6 +101,37 @@ async function enrichDetections(
 		d.image_url = buildBirdImageUrl(d.scientific_name);
 		const localized = taxonomy?.common_name?.trim();
 		if (localized) d.localized_common_name = localized;
+	}
+}
+
+async function attachRarityToDetections(
+	detections: EnrichedDetectionPayload[],
+	lat: number,
+	lng: number,
+): Promise<void> {
+	const uniqueNames = Array.from(new Set(detections.map((d) => d.scientific_name)));
+	const rarityByName = new Map<string, { tier: RarityTier; localCount90d: number }>();
+
+	await Promise.all(
+		uniqueNames.map(async (sci) => {
+			try {
+				const inatTaxonId = await searchInatTaxonId(sci);
+				if (inatTaxonId === null) return;
+				const observations = await fetchInatObservations(inatTaxonId, lat, lng);
+				const rarity = computeRarityFromObservations(observations);
+				if (rarity) rarityByName.set(sci, rarity);
+			} catch (err) {
+				console.warn('[birdie-proxy] rarity computation failed', {
+					scientific_name: sci,
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+		}),
+	);
+
+	for (const d of detections) {
+		const r = rarityByName.get(d.scientific_name);
+		if (r) d.rarity = r;
 	}
 }
 
@@ -181,6 +229,17 @@ export function registerAnalyzeRoute(app: Hono<{ Bindings: Env }>): void {
 			console.warn('[birdie-proxy] enrichment batch failed (continuing with base detections)', {
 				error: err instanceof Error ? err.message : String(err),
 			});
+		}
+
+		const position = extractPositionFromSettings(settings);
+		if (position) {
+			try {
+				await attachRarityToDetections(detections, position.lat, position.lng);
+			} catch (err) {
+				console.warn('[birdie-proxy] rarity computation batch failed (continuing without rarity)', {
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
 		}
 
 		const responseBody = {
