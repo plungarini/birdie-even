@@ -1,3 +1,4 @@
 # Secrets — non-secret ALLOWED_ORIGIN lives in wrangler.toml [vars].
 BIRDNET_API_KEY=changeme
 BIRDNET_SERVER_URL=http://xxx.xxx.xxx.xxx:8080
+XENO_CANTO_API_KEY=changeme
