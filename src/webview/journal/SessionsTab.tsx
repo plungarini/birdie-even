@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
 import { getJournalIndex, loadSession, type JournalSession } from '../../journal';
 import { SessionAccordion } from './SessionAccordion';
+import { BirdDetailPopup } from '../BirdDetailPopup';
+import type { PersonalStats } from '../../net/detail-types';
 
 export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 	const index = getJournalIndex();
 	const [sessions, setSessions] = useState<JournalSession[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [popupTarget, setPopupTarget] = useState<{
+		scientificName: string;
+		personalStats: PersonalStats;
+	} | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -36,11 +42,30 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 		);
 	}
 
+	function handleSelectSpecies(scientificName: string, personalStats: PersonalStats) {
+		setPopupTarget({ scientificName, personalStats });
+	}
+
 	return (
-		<div className="flex flex-col gap-3">
-			{sessions.map((s) => (
-				<SessionAccordion key={s.id} session={s} onCopyToast={onToast} />
-			))}
-		</div>
+		<>
+			<div className="flex flex-col gap-3">
+				{sessions.map((s) => (
+					<SessionAccordion
+						key={s.id}
+						session={s}
+						onCopyToast={onToast}
+						onSelectSpecies={handleSelectSpecies}
+					/>
+				))}
+			</div>
+
+			{popupTarget && (
+				<BirdDetailPopup
+					scientificName={popupTarget.scientificName}
+					onClose={() => setPopupTarget(null)}
+					personalStats={popupTarget.personalStats}
+				/>
+			)}
+		</>
 	);
 }

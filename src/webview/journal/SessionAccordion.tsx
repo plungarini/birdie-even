@@ -9,13 +9,16 @@ import {
 import { DetectionCard, type DetectionCardData } from '../DetectionCard';
 import { buildBirdDetailsUrl, copyTextWithExecCommand } from '../utils';
 import { SessionHeader } from './SessionHeader';
+import type { PersonalStats } from '../../net/detail-types';
 
 export function SessionAccordion({
 	session,
 	onCopyToast,
+	onSelectSpecies,
 }: {
 	session: JournalSession;
 	onCopyToast: (message: string) => void;
+	onSelectSpecies?: (sciName: string, personalStats: PersonalStats) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
@@ -72,6 +75,13 @@ export function SessionAccordion({
 									lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
 								)}
 								onCopyUrl={handleCopy}
+								onTap={onSelectSpecies ? (det) => {
+									onSelectSpecies(det.scientific_name, {
+										firstIdentifiedAt: lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
+										lastDetectedAt: d.lastDetectedAt,
+										detectionCount: d.count,
+									});
+								} : undefined}
 							/>
 						);
 					})}
