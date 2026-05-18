@@ -5,7 +5,7 @@ import { getJournalIndex, isNewToday, orderedLifeList } from '../../journal';
 import type { TaxonomyInfo } from '../../net/types';
 import type { PersonalStats } from '../../net/detail-types';
 import { DetectionCard, type DetectionCardData } from '../DetectionCard';
-import { BirdDetailPopup } from '../BirdDetailPopup';
+import { BirdDetailPopup } from '../detail-popup';
 import { buildBirdDetailsUrl, copyTextWithExecCommand } from '../utils';
 
 type SvgIcon = (props: SVGProps<SVGSVGElement>) => JSX.Element;

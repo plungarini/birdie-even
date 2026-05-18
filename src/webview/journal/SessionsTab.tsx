@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getJournalIndex, loadSession, type JournalSession } from '../../journal';
 import { SessionAccordion } from './SessionAccordion';
-import { BirdDetailPopup } from '../BirdDetailPopup';
+import { BirdDetailPopup } from '../detail-popup';
 import type { PersonalStats } from '../../net/detail-types';
 
 export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {

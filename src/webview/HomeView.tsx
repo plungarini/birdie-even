@@ -10,7 +10,7 @@ import {
 import { birdieStore, selectOrderedDetections } from '../store';
 import type { AggregatedDetection, BirdieStoreState } from '../store';
 import { DetectionCard, type DetectionCardData } from './DetectionCard';
-import { BirdDetailPopup } from './BirdDetailPopup';
+import { BirdDetailPopup } from './detail-popup';
 import { buildBirdDetailsUrl, copyTextWithExecCommand } from './utils';
 import type { PersonalStats } from '../net/detail-types';
 
