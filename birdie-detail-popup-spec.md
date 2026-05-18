@@ -133,7 +133,7 @@ The Worker must:
 
 - Run all calls in parallel.
 - Tolerate any single call failing without failing the whole response (return the field as null/empty).
-- Apply per-source cache TTLs (see Sources catalog below).
+- Apply per-source caching (see Caching section).
 - Strip raw source fields the client doesn't need; return only the normalized contract.
 
 ---
@@ -149,6 +149,62 @@ The Worker must:
 | XC          | `https://xeno-canto.org/api/3`                                  | API key (Worker secret) | 1 req/s                   | 24h                               |
 
 User-Agent header required on Wikipedia calls. Set a single identifying UA per the Worker's config.
+
+---
+
+## Caching
+
+Cache at the source-call level, not the bundle level. Build the `BirdDetail` response on each request from per-source cache hits. This way rarity and map pins (which vary by user location and time) refresh independently from taxa, description, and recordings (which do not).
+
+### Storage
+
+Use Cloudflare Cache API (`caches.default`) keyed by synthetic URL strings. Workers KV is acceptable for shared location-independent sources if global consistency is preferred over per-datacenter cache; pick one approach and apply consistently.
+
+### Cache key inputs
+
+| Source                            | Key inputs                                       | Notes                                                                                 |
+| --------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| iNat taxa                         | `inat_taxon_id`, `locale`                        | Locale changes `preferred_common_name` so it must be in the key.                      |
+| iNat observations (rarity + pins) | `inat_taxon_id`, `lat_q`, `lng_q`, `date_bucket` | See quantization below.                                                               |
+| Wikipedia REST summary            | `scientific_name`, `locale`                      | Locale = subdomain.                                                                   |
+| Wikipedia Action extracts         | `scientific_name`, `locale`                      | Same.                                                                                 |
+| Xeno-canto recordings             | `scientific_name`                                | Plus any query filters if used.                                                       |
+| GBIF density tiles                | not cached by the Worker                         | GBIF caches tiles server-side; the client fetches them directly via the URL template. |
+
+`lat_q` and `lng_q`: user coordinates quantized to a 0.1° grid (~10 km). The rarity query uses a 50 km radius, so 10 km grid alignment does not meaningfully change results and lets nearby users share a cache entry.
+
+`date_bucket`: current timestamp floored to the rarity TTL window (e.g. floored to the hour if TTL is 1h). This makes the key change predictably as TTL expires.
+
+### TTLs
+
+| Source                    | TTL      | Reasoning                               |
+| ------------------------- | -------- | --------------------------------------- |
+| iNat taxa                 | 7 days   | Taxonomy and photos rarely change.      |
+| iNat observations         | 1 hour   | Local sightings update through the day. |
+| Wikipedia REST summary    | 24 hours | Article changes are infrequent.         |
+| Wikipedia Action extracts | 24 hours | Same.                                   |
+| Xeno-canto recordings     | 7 days   | Catalog grows slowly.                   |
+
+Put all TTLs in a single config object in the Worker so they are tunable without code changes scattered across files.
+
+### Negative caching
+
+- Cache 404 and empty-result responses from any source for **1 hour**. Prevents repeated upstream hits when a species has no Wikipedia page, no recordings, or zero local observations.
+- Cache upstream 5xx errors for at most **60 seconds**. Short window because the upstream may recover.
+- Never cache 401, 403, or 429 responses. These are config or quota issues, not stable data.
+
+### Partial failure behavior
+
+Source calls are independent. A miss or error in one source does not invalidate or block cached values from any other source. The Worker composes the response from whatever combination of fresh and cached fields is available and returns the contract with the failed fields nulled out (per the empty-state spec).
+
+### Client-side cache headers
+
+| Endpoint           | Response header                                 | Reason                                                                                                                         |
+| ------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Popup details      | `Cache-Control: private, max-age=60` on success | Rarity and map vary by user location and time; client should refetch on reopen after a minute.                                 |
+| Detection pipeline | unchanged                                       | Whatever Cache-Control already applies to the existing detection endpoint stays; rarity addition does not change cacheability. |
+
+The client must not cache the popup response aggressively in app state across sessions because rarity is location-and-time-specific. In-memory cache for the duration of the popup being open is fine.
 
 ---
 
@@ -371,8 +427,25 @@ A single component used from three surfaces:
 
 ---
 
-## Additional Features
+## What is no longer used
 
-- Per-region IUCN status (e.g. status in Italy specifically). iNat returns regional statuses in `conservation_statuses` with a `place_id`.
+These scraped eBird internal endpoints from the earlier investigation are dropped:
+
+- `_v2_product_obsstats_*` (replaced by iNat `observations_count`)
+- `env` (bounding box; replaced by GBIF density tiles)
+- species aux endpoint with IUCN_status (replaced by iNat `conservation_statuses`)
+- `obs` media counts (not used)
+- `mapConfigs_batchGet` (Google Maps internal, irrelevant)
+- `gen_204` (analytics beacon, irrelevant)
+
+No scraped Cornell endpoints in production.
+
+---
+
+## Open items deferred
+
+- Per-region IUCN status (e.g. status in Italy specifically). iNat returns regional statuses in `conservation_statuses` with a `place_id`. Add when needed.
+- Seasonality / phenology chart. Would require eBird API key. Not in V1.
 - Subspecies handling. iNat ancestry has them; render only if user opts in.
-- Personal stats integration (first spotted, last spotted, total times). Comes from app DB.
+- Personal stats integration (first spotted, last spotted, total times). Comes from app DB, not specified here.
+- Tuning of rarity thresholds based on real data from the Cesena region.
