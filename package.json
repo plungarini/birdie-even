@@ -35,7 +35,7 @@
 		"build:prod": "tsc && vite build --mode prod",
 		"deploy:birdnet": "bash ./birdnet-server/deploy.sh",
 		"dev": "concurrently -n QR,VITE,SERVER -c cyan,green,yellow \"npm run qr\" \"vite --host 0.0.0.0 --port 5173\" \"npm run server\"",
-		"emulator": "npx evenhub-simulator http://localhost:5173/",
+		"emulator": "npx evenhub-simulator http://localhost:5173/ --aid alsa:pipewire",
 		"pack": "npm run build:prod && evenhub pack app.json dist -o birdie.ehpk",
 		"qr": "node ../../scripts/qr.mjs",
 		"server": "wrangler dev --port 3001 --ip 0.0.0.0",
