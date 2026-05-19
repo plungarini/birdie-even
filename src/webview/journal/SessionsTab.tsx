@@ -12,6 +12,7 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 		scientificName: string;
 		personalStats: PersonalStats;
 		birdUrl: string | null;
+		fallback: { commonName: string | null; imageUrl: string | null };
 	} | null>(null);
 
 	useEffect(() => {
@@ -47,8 +48,9 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 		scientificName: string,
 		personalStats: PersonalStats,
 		birdUrl: string | null,
+		fallback: { commonName: string | null; imageUrl: string | null },
 	) {
-		setPopupTarget({ scientificName, personalStats, birdUrl });
+		setPopupTarget({ scientificName, personalStats, birdUrl, fallback });
 	}
 
 	return (
@@ -70,6 +72,7 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 					onClose={() => setPopupTarget(null)}
 					personalStats={popupTarget.personalStats}
 					birdUrl={popupTarget.birdUrl}
+					fallback={popupTarget.fallback}
 				/>
 			)}
 		</>

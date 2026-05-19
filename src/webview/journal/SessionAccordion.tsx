@@ -7,7 +7,7 @@ import {
 	type JournalSession,
 } from '../../journal';
 import { DetectionCard, type DetectionCardData } from '../DetectionCard';
-import { buildBirdDetailsUrl, copyTextWithExecCommand } from '../utils';
+import { buildBirdDetailsUrl, copyTextWithExecCommand, displayCommonName } from '../utils';
 import { SessionHeader } from './SessionHeader';
 import type { PersonalStats } from '../../net/detail-types';
 
@@ -18,7 +18,12 @@ export function SessionAccordion({
 }: {
 	session: JournalSession;
 	onCopyToast: (message: string) => void;
-	onSelectSpecies?: (sciName: string, personalStats: PersonalStats, birdUrl: string | null) => void;
+	onSelectSpecies?: (
+		sciName: string,
+		personalStats: PersonalStats,
+		birdUrl: string | null,
+		fallback: { commonName: string | null; imageUrl: string | null },
+	) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
@@ -89,6 +94,10 @@ export function SessionAccordion({
 													detectionCount: d.count,
 												},
 												buildBirdDetailsUrl(det),
+												{
+													commonName: displayCommonName(det),
+													imageUrl: det.image_url || null,
+												},
 											);
 										} : undefined}
 									/>

@@ -6,7 +6,7 @@ import type { TaxonomyInfo } from '../../net/types';
 import type { PersonalStats } from '../../net/detail-types';
 import { DetectionCard, type DetectionCardData } from '../DetectionCard';
 import { BirdDetailPopup } from '../detail-popup';
-import { buildBirdDetailsUrl, copyTextWithExecCommand } from '../utils';
+import { buildBirdDetailsUrl, copyTextWithExecCommand, displayCommonName } from '../utils';
 
 type SvgIcon = (props: SVGProps<SVGSVGElement>) => JSX.Element;
 const SearchIcon = allIcons['guide-search'] as unknown as SvgIcon;
@@ -58,6 +58,7 @@ export function LifeListTab({ onToast }: { onToast: (msg: string) => void }) {
 		scientificName: string;
 		personalStats: PersonalStats;
 		birdUrl: string | null;
+		fallback: { commonName: string | null; imageUrl: string | null };
 	} | null>(null);
 	const entries = orderedLifeList(getJournalIndex());
 	const tokens = useMemo(() => normalizeQuery(query), [query]);
@@ -88,6 +89,10 @@ export function LifeListTab({ onToast }: { onToast: (msg: string) => void }) {
 					}
 				: { firstIdentifiedAt: 0, lastDetectedAt: 0, detectionCount: 0 },
 			birdUrl: buildBirdDetailsUrl(detection),
+			fallback: {
+				commonName: displayCommonName(detection),
+				imageUrl: detection.image_url || null,
+			},
 		});
 	}
 
@@ -163,6 +168,7 @@ export function LifeListTab({ onToast }: { onToast: (msg: string) => void }) {
 					onClose={() => setPopupSpecies(null)}
 					personalStats={popupSpecies.personalStats}
 					birdUrl={popupSpecies.birdUrl}
+					fallback={popupSpecies.fallback}
 				/>
 			)}
 		</>

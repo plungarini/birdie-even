@@ -11,7 +11,7 @@ import { birdieStore, selectOrderedDetections } from '../store';
 import type { AggregatedDetection, BirdieStoreState } from '../store';
 import { DetectionCard, type DetectionCardData } from './DetectionCard';
 import { BirdDetailPopup } from './detail-popup';
-import { buildBirdDetailsUrl, copyTextWithExecCommand } from './utils';
+import { buildBirdDetailsUrl, copyTextWithExecCommand, displayCommonName } from './utils';
 import type { PersonalStats } from '../net/detail-types';
 
 type SvgIcon = React.FC<React.SVGProps<SVGSVGElement>>;
@@ -245,6 +245,10 @@ export function HomeView() {
 						state.detectionsByKey[popupSpecies.scientific_name],
 					)}
 					birdUrl={buildBirdDetailsUrl(popupSpecies)}
+					fallback={{
+						commonName: displayCommonName(popupSpecies),
+						imageUrl: popupSpecies.image_url || null,
+					}}
 				/>
 			)}
 		</div>

@@ -24,7 +24,31 @@ export interface BirdDetailPopupProps {
 	userLng?: number;
 	personalStats?: PersonalStats | null;
 	birdUrl?: string | null;
+	fallback?: {
+		commonName?: string | null;
+		imageUrl?: string | null;
+	};
 	onClose: () => void;
+}
+
+// Fills missing identity/hero fields in the API response with whatever we already
+// knew from the detection card. Keeps every section reading from a single BirdDetail.
+function mergeFallback(
+	detail: BirdDetail,
+	fallback: BirdDetailPopupProps['fallback'],
+): BirdDetail {
+	if (!fallback) return detail;
+	const commonName = detail.identity.commonName ?? fallback.commonName ?? null;
+	const heroPhoto =
+		detail.media.heroPhoto ??
+		(fallback.imageUrl ?
+			{ url: fallback.imageUrl, attribution: '', license: '' }
+		:	null);
+	return {
+		...detail,
+		identity: { ...detail.identity, commonName },
+		media: { ...detail.media, heroPhoto },
+	};
 }
 
 const ANIM_MS = 420;
@@ -36,6 +60,7 @@ export function BirdDetailPopup({
 	userLng,
 	personalStats,
 	birdUrl,
+	fallback,
 	onClose,
 }: BirdDetailPopupProps) {
 	const [detail, setDetail] = useState<BirdDetail | null>(null);
@@ -174,14 +199,20 @@ export function BirdDetailPopup({
 
 				{loading && <LoadingSkeleton />}
 
-				{error && (
-					<div className='p-4 text-center text-text-dim'>
-						<p className='text-normal-body'>{error}</p>
-					</div>
+				{!loading && detail && (
+					<DetailContent
+						detail={mergeFallback(detail, fallback)}
+						personalStats={personalStats}
+					/>
 				)}
 
-				{detail && !loading && (
-					<DetailContent detail={detail} personalStats={personalStats} />
+				{!loading && !detail && (
+					<FallbackContent
+						scientificName={scientificName}
+						commonName={fallback?.commonName ?? null}
+						imageUrl={fallback?.imageUrl ?? null}
+						error={error}
+					/>
 				)}
 			</div>
 		</div>
@@ -205,6 +236,58 @@ function DetailContent({
 			{detail.rarity && <RaritySection detail={detail} />}
 			<MapSection detail={detail} />
 			<StatsSection detail={detail} personalStats={personalStats} />
+		</div>
+	);
+}
+
+function FallbackContent({
+	scientificName,
+	commonName,
+	imageUrl,
+	error,
+}: {
+	scientificName: string;
+	commonName: string | null;
+	imageUrl: string | null;
+	error: string | null;
+}) {
+	return (
+		<div className='flex flex-col gap-4 p-4'>
+			<div className='flex flex-col gap-3'>
+				{imageUrl && (
+					<div className='absolute top-14 left-0 right-0 z-0 overflow-hidden'>
+						<img
+							src={imageUrl}
+							alt={commonName ?? scientificName}
+							className='relative z-10 h-70 w-full object-cover'
+							onError={(e) => {
+								(e.currentTarget as HTMLImageElement).style.display = 'none';
+							}}
+						/>
+						<div className='pointer-events-none absolute inset-0 z-20 bg-linear-to-t from-white from-5% to-transparent via-transparent' />
+					</div>
+				)}
+				<div className={`relative z-30 ${imageUrl ? 'pt-48' : ''}`}>
+					<h2 className='text-xl font-semibold text-text leading-tight'>
+						{commonName ?? scientificName}
+					</h2>
+					{commonName && (
+						<p className='text-detail italic text-text-dim mt-0.5'>
+							{scientificName}
+						</p>
+					)}
+				</div>
+			</div>
+
+			<div className='rounded-2xl border border-dashed border-border bg-white px-4 py-5 text-center'>
+				<p className='text-normal-body text-text'>
+					We couldn't load extra details for this species.
+				</p>
+				<p className='mt-1 text-detail text-text-dim'>
+					{error ??
+						'No matching record was found in the public catalogs. Try again later.'}
+				</p>
+			</div>
 		</div>
 	);
 }
