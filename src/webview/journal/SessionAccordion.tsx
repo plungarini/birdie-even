@@ -15,9 +15,11 @@ export function SessionAccordion({
 	session,
 	onCopyToast,
 	onSelectSpecies,
+	showCity = false,
 }: {
 	session: JournalSession;
 	onCopyToast: (message: string) => void;
+	showCity?: boolean;
 	onSelectSpecies?: (
 		sciName: string,
 		personalStats: PersonalStats,
@@ -65,7 +67,7 @@ export function SessionAccordion({
 				className='birdie-card-body w-full text-left cursor-pointer'
 				aria-expanded={expanded}
 			>
-				<SessionHeader session={session} expanded={expanded} />
+				<SessionHeader session={session} expanded={expanded} showCity={showCity} />
 			</button>
 			<div
 				className='grid transition-[grid-template-rows] duration-[420ms] ease-in-out'

@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { getJournalIndex, loadSession, type JournalSession } from '../../journal';
+import { getPreferencesState, subscribePreferences } from '../../preferences';
 import { SessionAccordion } from './SessionAccordion';
 import { BirdDetailPopup } from '../detail-popup';
 import type { PersonalStats } from '../../net/detail-types';
 
+function usePreferencesState() {
+	return useSyncExternalStore(subscribePreferences, getPreferencesState, getPreferencesState);
+}
+
 export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 	const index = getJournalIndex();
+	const { values: preferences } = usePreferencesState();
 	const [sessions, setSessions] = useState<JournalSession[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [popupTarget, setPopupTarget] = useState<{
@@ -62,6 +68,7 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 						session={s}
 						onCopyToast={onToast}
 						onSelectSpecies={handleSelectSpecies}
+						showCity={preferences.sessionShowCity}
 					/>
 				))}
 			</div>

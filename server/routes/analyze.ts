@@ -5,6 +5,7 @@ import { resolveWorkerLocale } from '../lib/locales';
 import { fetchTaxonomyCached } from '../lib/taxonomy';
 import { searchInatTaxonId, fetchInatObservations } from '../lib/inaturalist';
 import { computeRarityFromObservations } from '../lib/rarity';
+import { fetchWikipediaSummary } from '../lib/wikipedia';
 import type { Env, RarityTier, TaxonomyInfo } from '../types';
 
 interface UpstreamDetection {
@@ -25,6 +26,7 @@ interface EnrichedDetectionPayload {
 	image_url: string;
 	taxonomy: TaxonomyInfo | null;
 	rarity: { tier: RarityTier; localCount90d: number } | null;
+	taglineShort: string | null;
 }
 
 function extractLocaleFromSettings(raw: FormDataEntryValue | null): string | undefined {
@@ -67,6 +69,7 @@ function toDetection(raw: UpstreamDetection): EnrichedDetectionPayload | null {
 		image_url: '',
 		taxonomy: null,
 		rarity: null,
+		taglineShort: null,
 	};
 }
 
@@ -132,6 +135,34 @@ async function attachRarityToDetections(
 	for (const d of detections) {
 		const r = rarityByName.get(d.scientific_name);
 		if (r) d.rarity = r;
+	}
+}
+
+async function attachTaglinesToDetections(
+	detections: EnrichedDetectionPayload[],
+	locale: string,
+): Promise<void> {
+	const uniqueNames = Array.from(new Set(detections.map((d) => d.scientific_name)));
+	const taglineByName = new Map<string, string>();
+
+	await Promise.all(
+		uniqueNames.map(async (sci) => {
+			try {
+				const summary = await fetchWikipediaSummary(sci, locale);
+				const extract = summary?.extract?.trim();
+				if (extract) taglineByName.set(sci, extract);
+			} catch (err) {
+				console.warn('[birdie-proxy] wikipedia summary lookup failed', {
+					scientific_name: sci,
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+		}),
+	);
+
+	for (const d of detections) {
+		const t = taglineByName.get(d.scientific_name);
+		if (t) d.taglineShort = t;
 	}
 }
 
@@ -232,14 +263,15 @@ export function registerAnalyzeRoute(app: Hono<{ Bindings: Env }>): void {
 		}
 
 		const position = extractPositionFromSettings(settings);
-		if (position) {
-			try {
-				await attachRarityToDetections(detections, position.lat, position.lng);
-			} catch (err) {
-				console.warn('[birdie-proxy] rarity computation batch failed (continuing without rarity)', {
-					error: err instanceof Error ? err.message : String(err),
-				});
-			}
+		try {
+			await Promise.all([
+				position ? attachRarityToDetections(detections, position.lat, position.lng) : Promise.resolve(),
+				attachTaglinesToDetections(detections, locale),
+			]);
+		} catch (err) {
+			console.warn('[birdie-proxy] post-enrichment batch failed (continuing)', {
+				error: err instanceof Error ? err.message : String(err),
+			});
 		}
 
 		const responseBody = {
