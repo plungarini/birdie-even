@@ -1,5 +1,6 @@
 import { Button, Card } from 'even-toolkit/web';
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import appManifest from '../../app.json';
 import { config } from '../config';
 import { clearJournal, getJournalState, subscribeJournal } from '../journal';
 import { getLocaleLabel, resolveSupportedLocale } from '../locale';
@@ -460,6 +461,10 @@ export function SettingsView() {
           </Card>
           <LogsPanel />
         </section>
+
+        <p className="text-detail text-text-dim text-center pb-2">
+          Birdie v{appManifest.version}
+        </p>
       </div>
     </div>
   );
