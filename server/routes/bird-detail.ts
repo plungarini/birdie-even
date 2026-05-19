@@ -134,10 +134,13 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 				}
 			:	null;
 
+		const sizeSwap = (u: string, size: 'medium' | 'large') =>
+			u.replace(/\/(square|small|medium|large)\.(jpe?g|png)(\?|$)/i, `/${size}.$2$3`);
 		const gallery = (inatTaxon?.taxon_photos ?? [])
 			.filter((tp) => tp.photo)
 			.map((tp) => ({
-				url: tp.photo.url,
+				url: sizeSwap(tp.photo.url, 'medium'),
+				largeUrl: sizeSwap(tp.photo.url, 'large'),
 				attribution: tp.photo.attribution,
 				license: tp.photo.license_code,
 			}));

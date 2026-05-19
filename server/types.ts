@@ -34,7 +34,7 @@ export interface BirdDetailResponse {
 			attribution: string;
 			license: string;
 		} | null;
-		gallery: Array<{ url: string; attribution: string; license: string }>;
+		gallery: Array<{ url: string; largeUrl: string; attribution: string; license: string }>;
 	};
 
 	description: {
