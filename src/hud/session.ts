@@ -74,10 +74,11 @@ const STATIC_LAYOUT: HudLayoutDescriptor = {
 // Listening layout — shadow capture + wave column + 3 info rows + image.
 // The middle column is split into header/body/footer text containers so the
 // bird's identity, summary, and badges can update independently.
-const INFO_X = LISTEN_SLIM_W + INFO_GAP;
-const INFO_W = HUD_WIDTH - LISTEN_SLIM_W - INFO_GAP - IMG_W;
+const INFO_X = LISTEN_SLIM_W;
+const INFO_W = HUD_WIDTH - LISTEN_SLIM_W - IMG_W - INFO_GAP;
 const INFO_HEADER_Y = 0;
-const INFO_BODY_Y = INFO_HEADER_Y + INFO_HEADER_H + INFO_BODY_GAP;
+export const INFO_HEADER_W = HUD_WIDTH - LISTEN_SLIM_W - INFO_GAP;
+const INFO_BODY_Y = INFO_HEADER_Y + INFO_HEADER_H;
 const INFO_FOOTER_Y = HUD_HEIGHT - INFO_FOOTER_H;
 const INFO_BODY_H = INFO_FOOTER_Y - INFO_BODY_Y - INFO_BODY_GAP;
 
@@ -101,7 +102,7 @@ const LISTENING_LAYOUT: HudLayoutDescriptor = {
 			containerName: 'birdHeader',
 			xPosition: INFO_X,
 			yPosition: INFO_HEADER_Y,
-			width: INFO_W,
+			width: INFO_HEADER_W,
 			height: INFO_HEADER_H,
 			paddingLength: 4,
 			borderWidth: 0,
@@ -147,23 +148,33 @@ const LISTENING_LAYOUT: HudLayoutDescriptor = {
 // life-list BR). Re-exported via LAYOUTS for the renderer.
 
 export const LAYOUT = STATIC_LAYOUT; // backwards-compat named export
-export const LAYOUTS = { static: STATIC_LAYOUT, listening: LISTENING_LAYOUT, home: HOME_LAYOUT };
+export const LAYOUTS = {
+	static: STATIC_LAYOUT,
+	listening: LISTENING_LAYOUT,
+	home: HOME_LAYOUT,
+};
 
 let pageCreated = false;
 let activeLayoutKey: string | null = null;
 let lastContents: Record<string, string> = {};
 
 function truncate(s: string): string {
-	return s.length <= HUD_CONTENT_CHAR_LIMIT ? s : s.slice(0, HUD_CONTENT_CHAR_LIMIT - 1) + '…';
+	return s.length <= HUD_CONTENT_CHAR_LIMIT ?
+			s
+		:	s.slice(0, HUD_CONTENT_CHAR_LIMIT - 1) + '…';
 }
 
-function buildParams(layout: HudLayoutDescriptor, contents: Record<string, string>) {
+function buildParams(
+	layout: HudLayoutDescriptor,
+	contents: Record<string, string>,
+) {
 	const params: {
 		containerTotalNum: number;
 		textObject: TextContainerProperty[];
 		imageObject?: ImageContainerProperty[];
 	} = {
-		containerTotalNum: layout.textDescriptors.length + (layout.imageDescriptors?.length ?? 0),
+		containerTotalNum:
+			layout.textDescriptors.length + (layout.imageDescriptors?.length ?? 0),
 		textObject: layout.textDescriptors.map(
 			(d) =>
 				new TextContainerProperty({
@@ -173,7 +184,9 @@ function buildParams(layout: HudLayoutDescriptor, contents: Record<string, strin
 		),
 	};
 	if (layout.imageDescriptors && layout.imageDescriptors.length > 0) {
-		params.imageObject = layout.imageDescriptors.map((d) => new ImageContainerProperty({ ...d }));
+		params.imageObject = layout.imageDescriptors.map(
+			(d) => new ImageContainerProperty({ ...d }),
+		);
 	}
 	return params;
 }
@@ -185,7 +198,10 @@ function buildParams(layout: HudLayoutDescriptor, contents: Record<string, strin
 // starves image updates (and vice versa), but within each kind ordering is
 // strictly serialized so the firmware doesn't see races on a single channel.
 type TextOp = { containerName: string; content: string };
-type ImageOp = { containerName: string; imageData: number[] | string | Uint8Array | ArrayBuffer };
+type ImageOp = {
+	containerName: string;
+	imageData: number[] | string | Uint8Array | ArrayBuffer;
+};
 const IMAGE_SEND_RETRY_MS = 120;
 
 export class HudSession {
@@ -208,7 +224,9 @@ export class HudSession {
 		if (!pageCreated) {
 			let created: StartUpPageCreateResult;
 			try {
-				created = await this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(params));
+				created = await this.bridge.createStartUpPageContainer(
+					new CreateStartUpPageContainer(params),
+				);
 			} catch {
 				return;
 			}
@@ -218,7 +236,9 @@ export class HudSession {
 				lastContents = { ...next.textContents };
 				return;
 			}
-			const ok = await this.bridge.rebuildPageContainer(new RebuildPageContainer(params));
+			const ok = await this.bridge.rebuildPageContainer(
+				new RebuildPageContainer(params),
+			);
 			if (ok) {
 				pageCreated = true;
 				activeLayoutKey = next.layout.key;
@@ -228,7 +248,9 @@ export class HudSession {
 		}
 
 		if (activeLayoutKey !== next.layout.key) {
-			const ok = await this.bridge.rebuildPageContainer(new RebuildPageContainer(params));
+			const ok = await this.bridge.rebuildPageContainer(
+				new RebuildPageContainer(params),
+			);
 			if (!ok) return;
 			activeLayoutKey = next.layout.key;
 			lastContents = { ...next.textContents };
@@ -250,7 +272,10 @@ export class HudSession {
 		this.kickTextDrain();
 	}
 
-	upgradeImage(containerName: string, imageData: number[] | string | Uint8Array | ArrayBuffer): void {
+	upgradeImage(
+		containerName: string,
+		imageData: number[] | string | Uint8Array | ArrayBuffer,
+	): void {
 		this.imagePending.set(containerName, { containerName, imageData });
 		this.kickImageDrain();
 	}
@@ -304,10 +329,15 @@ export class HudSession {
 		}
 	}
 
-	private async sendText(containerName: string, content: string): Promise<void> {
+	private async sendText(
+		containerName: string,
+		content: string,
+	): Promise<void> {
 		const layout = this.currentLayout();
 		if (!layout) return;
-		const d = layout.textDescriptors.find((x) => x.containerName === containerName);
+		const d = layout.textDescriptors.find(
+			(x) => x.containerName === containerName,
+		);
 		if (!d) return;
 		// Re-check after coalescing — another op may have already set this value.
 		if (lastContents[containerName] === content) return;
@@ -333,7 +363,9 @@ export class HudSession {
 	): Promise<void> {
 		const layout = this.currentLayout();
 		if (!layout) return;
-		const d = layout.imageDescriptors?.find((x) => x.containerName === containerName);
+		const d = layout.imageDescriptors?.find(
+			(x) => x.containerName === containerName,
+		);
 		if (!d) return;
 		try {
 			let result = await this.bridge.updateImageRawData(
@@ -373,9 +405,12 @@ export class HudSession {
 	}
 }
 
-function getImageLength(imageData: number[] | string | Uint8Array | ArrayBuffer): number {
+function getImageLength(
+	imageData: number[] | string | Uint8Array | ArrayBuffer,
+): number {
 	if (typeof imageData === 'string') return imageData.length;
-	if (Array.isArray(imageData) || imageData instanceof Uint8Array) return imageData.length;
+	if (Array.isArray(imageData) || imageData instanceof Uint8Array)
+		return imageData.length;
 	return imageData.byteLength;
 }
 

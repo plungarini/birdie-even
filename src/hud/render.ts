@@ -8,8 +8,7 @@ import { alignRow, centerLine } from './utils';
 const BODY_WIDTH = 544;
 // Approximate inner width (px) of the middle-column info containers on the
 // listening layout. Used to centre the header/footer rows visually.
-const INFO_WIDTH = 392;
-const BODY_TEXT_CHAR_LIMIT = 220;
+const BODY_TEXT_CHAR_LIMIT = 290;
 
 function nowClock(): string {
 	const now = new Date();
@@ -96,9 +95,9 @@ export function buildWaveContent(
 }
 
 export function buildHeaderText(detection: AggregatedDetection): string {
-	const common = displayCommonName(detection).slice(0, 40);
-	const sci = detection.scientific_name.slice(0, 42);
-	return [common, sci].join('\n');
+	const common = displayCommonName(detection);
+	const sci = detection.scientific_name;
+	return truncateToParagraph([common, sci].join(' · '), 50);
 }
 
 export function buildBodyText(detection: AggregatedDetection): string {
@@ -120,11 +119,10 @@ export function buildFooterText(
 	isNew: boolean,
 ): string {
 	const parts: string[] = [];
-	if (isNew) parts.push('NEW');
-	parts.push(pct(detection.bestConfidence));
-	parts.push(`${detection.count}×`);
+	let newStr = isNew ? '[NEW]  ' : '';
 	if (detection.rarity) parts.push(RARITY_LABELS[detection.rarity.tier]);
-	return centerLine(parts.join(' · '), INFO_WIDTH);
+	parts.push(pct(detection.bestConfidence), `${detection.count}×`);
+	return `${newStr}${parts.join('  ·  ')}`;
 }
 
 function truncateToParagraph(text: string, maxChars: number): string {
@@ -137,6 +135,6 @@ function truncateToParagraph(text: string, maxChars: number): string {
 	);
 	const cutAt =
 		lastBoundary > maxChars * 0.5 ? lastBoundary + 1 : slice.lastIndexOf(' ');
-	const trimmed = cutAt > 0 ? slice.slice(0, cutAt) : slice;
-	return `${trimmed.trimEnd()}…`;
+	const trimmed = cutAt > 0 ? slice.slice(0, cutAt) : slice + '…';
+	return `${trimmed.trimEnd()}`;
 }
