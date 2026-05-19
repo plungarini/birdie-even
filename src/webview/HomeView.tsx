@@ -10,7 +10,9 @@ import {
 import { birdieStore, selectOrderedDetections } from '../store';
 import type { AggregatedDetection, BirdieStoreState } from '../store';
 import { DetectionCard, type DetectionCardData } from './DetectionCard';
-import { buildBirdDetailsUrl, copyTextWithExecCommand } from './utils';
+import { BirdDetailPopup } from './detail-popup';
+import { buildBirdDetailsUrl, copyTextWithExecCommand, displayCommonName } from './utils';
+import type { PersonalStats } from '../net/detail-types';
 
 type SvgIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 const IcBird = allIcons['feat-message'] as SvgIcon;
@@ -72,6 +74,7 @@ export function HomeView() {
 
 	const [blimpingKeys, setBlimpingKeys] = useState<ReadonlySet<string>>(new Set());
 	const blimpTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+	const [popupSpecies, setPopupSpecies] = useState<DetectionCardData | null>(null);
 	const [toast, setToast] = useState('');
 	const toastTimeoutRef = useRef<number | null>(null);
 
@@ -119,6 +122,18 @@ export function HomeView() {
 		}
 		const copied = copyTextWithExecCommand(url);
 		showToast(copied ? 'Copied bird details URL' : 'Copy failed');
+	}
+
+	function handleTapDetection(d: DetectionCardData) {
+		setPopupSpecies(d);
+	}
+
+	function popupPersonalStats(d: AggregatedDetection): PersonalStats {
+		return {
+			firstIdentifiedAt: d.firstDetectedAt,
+			lastDetectedAt: d.lastDetectedAt,
+			detectionCount: d.count,
+		};
 	}
 
 	function isCardNewToday(d: AggregatedDetection): boolean {
@@ -200,6 +215,7 @@ export function HomeView() {
 								isBlimping={blimpingKeys.has(d.scientific_name)}
 								isNewToday={isCardNewToday(d)}
 								onCopyUrl={handleCopyBirdUrl}
+								onTap={handleTapDetection}
 							/>
 						))}
 					</section>
@@ -219,6 +235,21 @@ export function HomeView() {
 						</p>
 					</div>
 				</div>
+			)}
+
+			{popupSpecies && (
+				<BirdDetailPopup
+					scientificName={popupSpecies.scientific_name}
+					onClose={() => setPopupSpecies(null)}
+					personalStats={popupPersonalStats(
+						state.detectionsByKey[popupSpecies.scientific_name],
+					)}
+					birdUrl={buildBirdDetailsUrl(popupSpecies)}
+					fallback={{
+						commonName: displayCommonName(popupSpecies),
+						imageUrl: popupSpecies.image_url || null,
+					}}
+				/>
 			)}
 		</div>
 	);

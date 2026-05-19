@@ -1,5 +1,6 @@
 import { Button, Card } from 'even-toolkit/web';
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import appManifest from '../../app.json';
 import { config } from '../config';
 import { clearJournal, getJournalState, subscribeJournal } from '../journal';
 import { getLocaleLabel, resolveSupportedLocale } from '../locale';
@@ -372,6 +373,22 @@ export function SettingsView() {
                   className="mt-1 h-5 w-5 cursor-pointer"
                 />
               </label>
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="birdie-setting-label">Show city in sessions</p>
+                  <p className="birdie-setting-help">
+                    Resolve coordinates to a city name in session cards. Requires location to be set.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferences.sessionShowCity}
+                  onChange={(event) =>
+                    updateBirdiePreferences({ sessionShowCity: event.currentTarget.checked })
+                  }
+                  className="mt-1 h-5 w-5 cursor-pointer"
+                />
+              </label>
               <div className="grid grid-cols-2 gap-3">
                 <div className="birdie-setting-mini">
                   <p className="text-detail uppercase tracking-[0.18em] text-text-dim">Sessions saved</p>
@@ -444,6 +461,10 @@ export function SettingsView() {
           </Card>
           <LogsPanel />
         </section>
+
+        <p className="text-detail text-text-dim text-center pb-2">
+          Birdie v{appManifest.version}
+        </p>
       </div>
     </div>
   );

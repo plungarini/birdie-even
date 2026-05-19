@@ -8,4 +8,6 @@ enabled = true
 
 [vars]
 ALLOWED_ORIGIN = "*"
-# BIRDNET_API_KEY, BIRDNET_SERVER_URL, and EBIRD_API_TOKEN are secrets — set via .dev.vars locally or `wrangler secret put` in production.
+
+
+# BIRDNET_API_KEY, BIRDNET_SERVER_URL, EBIRD_API_TOKEN, and XENO_CANTO_API_KEY are secrets — set via .dev.vars locally or `wrangler secret put` in production.

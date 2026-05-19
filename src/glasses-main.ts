@@ -3,8 +3,17 @@ import { initCapture, startCapture, stopCapture } from './audio/capture';
 import { config } from './config';
 import { registerCaptureControlHandler } from './control';
 import { generateBlackImageData, loadBirdImageData } from './hud/bird-image';
+import { generateHomeImageData } from './hud/home-image';
 import { ANIM_FRAME_MS, IMG_H, IMG_W } from './hud/constants';
-import { buildPopupText, buildWaveContent, renderInitialListeningHud, renderStaticHud } from './hud/render';
+import { createHomeOrchestrator, type HomeOrchestrator } from './hud/home/orchestrator';
+import {
+	buildBodyText,
+	buildFooterText,
+	buildHeaderText,
+	buildWaveContent,
+	renderInitialListeningHud,
+	renderStaticHud,
+} from './hud/render';
 import { HudSession, LAYOUTS } from './hud/session';
 import { stateMachine } from './hud/state-machine';
 import { WaveformBuffer } from './hud/waveform-buffer';
@@ -28,6 +37,7 @@ import {
 import { birdieStore } from './store';
 
 let hudSession: HudSession | null = null;
+let homeOrchestrator: HomeOrchestrator | null = null;
 let analysisInFlight = false;
 let lastHudStateType: string | null = null;
 let hasLoggedFirstAudioPacket = false;
@@ -40,8 +50,11 @@ const waveBuffer = new WaveformBuffer();
 let animTick = 0;
 let animTimer: ReturnType<typeof setInterval> | null = null;
 let popupSpeciesKey: string | null = null;
-let popupTextContent = '';
+let popupHeaderContent = '';
+let popupBodyContent = '';
+let popupFooterContent = '';
 let imageContainerClear = true;
+let homeImageSent = false;
 
 function handleCaptureIntent(intent: 'start' | 'stop' | 'toggle' = 'toggle') {
 	const currentType = stateMachine.getState().type;
@@ -80,19 +93,48 @@ function isListeningLayoutActive(): boolean {
 	return hudSession?.getActiveLayoutKey() === LAYOUTS.listening.key;
 }
 
-async function renderStatic(): Promise<void> {
+function isHomeLayoutActive(): boolean {
+	return hudSession?.getActiveLayoutKey() === LAYOUTS.home.key;
+}
+
+async function renderStateBackdrop(): Promise<void> {
 	if (!hudSession) return;
 	const state = stateMachine.getState();
+	if (state.type === 'IDLE') {
+		await renderHome();
+		return;
+	}
+	homeImageSent = false;
+	homeOrchestrator?.onExitHome();
 	await hudSession.render(renderStaticHud(state));
+}
+
+async function renderHome(): Promise<void> {
+	if (!hudSession || !homeOrchestrator) return;
+	const wasHome = isHomeLayoutActive();
+	await hudSession.render(homeOrchestrator.initialRender());
+	homeOrchestrator.onEnterHome();
+	if (!wasHome) homeImageSent = false;
+	if (!homeImageSent && isHomeLayoutActive()) {
+		const bytes = await generateHomeImageData();
+		if (bytes && isHomeLayoutActive()) {
+			hudSession.upgradeImage('homeImage', bytes);
+			homeImageSent = true;
+		}
+	}
 }
 
 async function renderListeningInitial(): Promise<void> {
 	if (!hudSession) return;
+	homeOrchestrator?.onExitHome();
 	await hudSession.render(renderInitialListeningHud());
 	// Per SDK docs, image container starts as an invisible placeholder — no initial send needed.
 	popupSpeciesKey = null;
-	popupTextContent = '';
+	popupHeaderContent = '';
+	popupBodyContent = '';
+	popupFooterContent = '';
 	imageContainerClear = true;
+	homeImageSent = false;
 }
 
 function startAnimLoop(): void {
@@ -129,9 +171,13 @@ function renderListeningIfCaptureIsActive(): void {
 
 async function dismissPopup(): Promise<void> {
 	popupSpeciesKey = null;
-	popupTextContent = '';
+	popupHeaderContent = '';
+	popupBodyContent = '';
+	popupFooterContent = '';
 	if (!hudSession || !isListeningLayoutActive()) return;
-	hudSession.upgradeText('birdInfo', ' ');
+	hudSession.upgradeText('birdHeader', ' ');
+	hudSession.upgradeText('birdBody', ' ');
+	hudSession.upgradeText('birdFooter', ' ');
 	if (!imageContainerClear) {
 		const black = await generateBlackImageData(IMG_W, IMG_H);
 		hudSession.upgradeImage('birdImage', black);
@@ -139,11 +185,25 @@ async function dismissPopup(): Promise<void> {
 	}
 }
 
-function upgradePopupText(content: string): void {
+function upgradePopupHeader(content: string): void {
 	if (!hudSession || !isListeningLayoutActive()) return;
-	if (popupTextContent === content) return;
-	hudSession.upgradeText('birdInfo', content);
-	popupTextContent = content;
+	if (popupHeaderContent === content) return;
+	hudSession.upgradeText('birdHeader', content);
+	popupHeaderContent = content;
+}
+
+function upgradePopupBody(content: string): void {
+	if (!hudSession || !isListeningLayoutActive()) return;
+	if (popupBodyContent === content) return;
+	hudSession.upgradeText('birdBody', content);
+	popupBodyContent = content;
+}
+
+function upgradePopupFooter(content: string): void {
+	if (!hudSession || !isListeningLayoutActive()) return;
+	if (popupFooterContent === content) return;
+	hudSession.upgradeText('birdFooter', content);
+	popupFooterContent = content;
 }
 
 async function showOrRefreshPopupForKey(key: string): Promise<void> {
@@ -155,18 +215,21 @@ async function showOrRefreshPopupForKey(key: string): Promise<void> {
 	const isNew =
 		birdieStore.getState().latestNewKeys.includes(detection.scientific_name) ||
 		isNewToday(lifeEntry?.firstIdentifiedAt ?? detection.firstDetectedAt);
-	const nextText = buildPopupText(detection, isNew);
-	if (popupSpeciesKey === key) {
-		// Same bird: only refresh the text content so the heard count/confidence can change.
-		upgradePopupText(nextText);
-		return;
-	}
 
+	const nextHeader = buildHeaderText(detection);
+	const nextBody = buildBodyText(detection);
+	const nextFooter = buildFooterText(detection, isNew);
+
+	const isSameBird = popupSpeciesKey === key;
 	popupSpeciesKey = key;
-	// Text goes first in the serial queue so it lands before the image.
-	upgradePopupText(nextText);
+	// Text goes through the text serial queue; the body changes least often
+	// (tagline is per-species) so we still push it on every refresh to catch
+	// late-arriving Wikipedia summaries.
+	upgradePopupHeader(nextHeader);
+	upgradePopupBody(nextBody);
+	upgradePopupFooter(nextFooter);
 
-	if (detection.image_url) {
+	if (!isSameBird && detection.image_url) {
 		const imageData = await loadBirdImageData(detection.image_url);
 		if (imageData && popupSpeciesKey === key && isListeningLayoutActive()) {
 			hudSession.upgradeImage('birdImage', imageData);
@@ -234,6 +297,7 @@ async function main() {
 	hudSession = new HudSession(bridge);
 	await initPreferences(bridge);
 	await initJournalRepository(bridge);
+	homeOrchestrator = createHomeOrchestrator(hudSession);
 	birdieStore.setPreferences(getPreferencesState().values);
 	subscribePreferences(() => {
 		birdieStore.setPreferences(getPreferencesState().values);
@@ -334,11 +398,13 @@ async function main() {
 		} else if (!entersListeningLayout && lastHudStateType && isListeningState(lastHudStateType)) {
 			stopAnimLoop();
 			popupSpeciesKey = null;
-			popupTextContent = '';
+			popupHeaderContent = '';
+			popupBodyContent = '';
+			popupFooterContent = '';
 			imageContainerClear = true;
-			renderStatic().catch((err) => console.error('[birdie] renderStatic failed', err));
+			renderStateBackdrop().catch((err) => console.error('[birdie] renderStateBackdrop failed', err));
 		} else if (!entersListeningLayout) {
-			renderStatic().catch((err) => console.error('[birdie] renderStatic failed', err));
+			renderStateBackdrop().catch((err) => console.error('[birdie] renderStateBackdrop failed', err));
 		}
 
 		// Start/stop audio capture based on state.
@@ -431,8 +497,12 @@ async function main() {
 		}
 	});
 
+	// onForegroundEnter() fires the state-machine subscriber synchronously,
+	// which already kicks off the initial renderStateBackdrop(). Awaiting a
+	// second render here would race the first one through createStartUpPage,
+	// adding 100-300 ms of avoidable startup delay before the home image even
+	// starts transferring over BLE.
 	stateMachine.onForegroundEnter();
-	await renderStatic();
 
 	console.log('[birdie] glasses layer ready');
 }
