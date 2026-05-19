@@ -140,6 +140,7 @@ export function LifeListTab({ onToast }: { onToast: (msg: string) => void }) {
 						bestConfidence: entry.bestConfidence,
 						count: entry.detectionCount,
 						lastDetectedAt: entry.lastDetectedAt,
+						rarity: entry.rarity ?? null,
 					};
 					return (
 						<DetectionCard

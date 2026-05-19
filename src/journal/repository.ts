@@ -99,6 +99,7 @@ export async function commitSession(session: JournalSession): Promise<void> {
 				detectionCount: existing.detectionCount + detection.count,
 				bestConfidence: Math.max(existing.bestConfidence, detection.bestConfidence),
 				sessions,
+				rarity: detection.rarity ?? existing.rarity ?? null,
 			};
 		} else {
 			lifeList[key] = {
@@ -112,6 +113,7 @@ export async function commitSession(session: JournalSession): Promise<void> {
 				detectionCount: detection.count,
 				bestConfidence: detection.bestConfidence,
 				sessions: [session.id],
+				rarity: detection.rarity ?? null,
 			};
 		}
 	}
@@ -155,6 +157,7 @@ export interface AggregateInput {
 	image_url: string;
 	taxonomy: import('../net/types').TaxonomyInfo | null;
 	confidence: number;
+	rarity?: { tier: import('../net/detail-types').RarityTier; localCount90d: number } | null;
 }
 
 export function aggregateSessionDetection(
@@ -172,6 +175,7 @@ export function aggregateSessionDetection(
 			count: existing.count + 1,
 			lastDetectedAt: now,
 			bestConfidence: Math.max(existing.bestConfidence, incoming.confidence),
+			rarity: incoming.rarity ?? existing.rarity ?? null,
 		};
 	}
 	return {
@@ -184,5 +188,6 @@ export function aggregateSessionDetection(
 		firstDetectedAt: now,
 		lastDetectedAt: now,
 		bestConfidence: incoming.confidence,
+		rarity: incoming.rarity ?? null,
 	};
 }

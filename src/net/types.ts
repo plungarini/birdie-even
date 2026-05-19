@@ -56,6 +56,7 @@ export interface EnrichResponse {
 export interface EnrichedDetection extends Detection {
   image_url: string;
   taxonomy: TaxonomyInfo | null;
+  rarity?: { tier: import('./detail-types').RarityTier; localCount90d: number } | null;
 }
 
 export interface EnrichRequestBody {
