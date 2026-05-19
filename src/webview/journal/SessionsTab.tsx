@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
 import { getJournalIndex, loadSession, type JournalSession } from '../../journal';
 import { SessionAccordion } from './SessionAccordion';
+import { BirdDetailPopup } from '../detail-popup';
+import type { PersonalStats } from '../../net/detail-types';
 
 export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 	const index = getJournalIndex();
 	const [sessions, setSessions] = useState<JournalSession[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [popupTarget, setPopupTarget] = useState<{
+		scientificName: string;
+		personalStats: PersonalStats;
+		birdUrl: string | null;
+		fallback: { commonName: string | null; imageUrl: string | null };
+	} | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -36,11 +44,37 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 		);
 	}
 
+	function handleSelectSpecies(
+		scientificName: string,
+		personalStats: PersonalStats,
+		birdUrl: string | null,
+		fallback: { commonName: string | null; imageUrl: string | null },
+	) {
+		setPopupTarget({ scientificName, personalStats, birdUrl, fallback });
+	}
+
 	return (
-		<div className="flex flex-col gap-3">
-			{sessions.map((s) => (
-				<SessionAccordion key={s.id} session={s} onCopyToast={onToast} />
-			))}
-		</div>
+		<>
+			<div className="flex flex-col gap-3">
+				{sessions.map((s) => (
+					<SessionAccordion
+						key={s.id}
+						session={s}
+						onCopyToast={onToast}
+						onSelectSpecies={handleSelectSpecies}
+					/>
+				))}
+			</div>
+
+			{popupTarget && (
+				<BirdDetailPopup
+					scientificName={popupTarget.scientificName}
+					onClose={() => setPopupTarget(null)}
+					personalStats={popupTarget.personalStats}
+					birdUrl={popupTarget.birdUrl}
+					fallback={popupTarget.fallback}
+				/>
+			)}
+		</>
 	);
 }

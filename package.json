@@ -5,6 +5,7 @@
 		"clsx": "^2.1.1",
 		"even-toolkit": "^1.5.0",
 		"hono": "^4.12.9",
+		"lucide-react": "^1.16.0",
 		"react": "^19.2.4",
 		"react-dom": "^19.2.4",
 		"react-router": "^7.13.2",

@@ -1,6 +1,7 @@
 import { Badge, Card } from 'even-toolkit/web';
 import React, { useEffect, useRef, useState } from 'react';
 import type { TaxonomyInfo } from '../net/types';
+import type { RarityTier } from '../net/detail-types';
 import {
 	buildBirdDetailsUrl,
 	confidenceVariant,
@@ -8,6 +9,14 @@ import {
 	formatShortRelative,
 	pct,
 } from './utils';
+
+const RARITY_DOT_COLORS: Record<RarityTier, string> = {
+	legendary: 'bg-indigo-500',
+	rare: 'bg-amber-500',
+	uncommon: 'bg-sky-500',
+	common: 'bg-teal-500',
+	very_common: 'bg-gray-500',
+};
 
 function GlobeIcon(props: React.SVGProps<SVGSVGElement>) {
 	return (
@@ -64,6 +73,7 @@ export interface DetectionCardData {
 	bestConfidence: number;
 	count: number;
 	lastDetectedAt: number;
+	rarity?: { tier: RarityTier; localCount90d: number } | null;
 }
 
 export function DetectionCard({
@@ -73,6 +83,7 @@ export function DetectionCard({
 	isLifeList = false,
 	onCopyUrl,
 	countLabel,
+	onTap,
 }: {
 	detection: DetectionCardData;
 	isBlimping?: boolean;
@@ -80,6 +91,7 @@ export function DetectionCard({
 	isLifeList?: boolean;
 	onCopyUrl: (detection: DetectionCardData) => void;
 	countLabel?: string;
+	onTap?: (detection: DetectionCardData) => void;
 }) {
 	const [copied, setCopied] = useState(false);
 	const copiedTimeoutRef = useRef<number | null>(null);
@@ -106,10 +118,22 @@ export function DetectionCard({
 		}, 1800);
 	}
 
+	function handleCardClick() {
+		if (onTap) onTap(detection);
+	}
+
+	function handleCopyClickWithStop(e: React.MouseEvent) {
+		e.stopPropagation();
+		handleCopyClick();
+	}
+
+	const cursorClass = onTap ? 'cursor-pointer' : '';
+
 	return (
 		<Card
 			padding='none'
-			className={`birdie-surface-card ${isBlimping ? 'birdie-card--blimp' : ''}`}
+			className={`birdie-surface-card ${isBlimping ? 'birdie-card--blimp' : ''} ${cursorClass}`}
+			onClick={handleCardClick}
 		>
 			<div className='birdie-card-body'>
 				<div className='flex items-start justify-between gap-3'>
@@ -131,6 +155,12 @@ export function DetectionCard({
 							<p className='text-normal-title text-text break-words'>
 								{displayCommonName(detection)}
 							</p>
+							{detection.rarity && (
+								<span
+									className={`inline-block h-2 w-2 flex-none rounded-full ${RARITY_DOT_COLORS[detection.rarity.tier]}`}
+									aria-label={`Rarity: ${detection.rarity.tier}`}
+								/>
+							)}
 						</div>
 
 						<p className='mt-1 text-detail italic text-text-dim break-words'>
@@ -156,7 +186,7 @@ export function DetectionCard({
 					</div>
 					<button
 						type='button'
-						onClick={handleCopyClick}
+						onClick={handleCopyClickWithStop}
 						disabled={!birdUrl}
 						aria-label={
 							birdUrl ? 'Copy bird details URL' : 'Bird details URL unavailable'

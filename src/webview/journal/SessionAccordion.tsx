@@ -7,15 +7,23 @@ import {
 	type JournalSession,
 } from '../../journal';
 import { DetectionCard, type DetectionCardData } from '../DetectionCard';
-import { buildBirdDetailsUrl, copyTextWithExecCommand } from '../utils';
+import { buildBirdDetailsUrl, copyTextWithExecCommand, displayCommonName } from '../utils';
 import { SessionHeader } from './SessionHeader';
+import type { PersonalStats } from '../../net/detail-types';
 
 export function SessionAccordion({
 	session,
 	onCopyToast,
+	onSelectSpecies,
 }: {
 	session: JournalSession;
 	onCopyToast: (message: string) => void;
+	onSelectSpecies?: (
+		sciName: string,
+		personalStats: PersonalStats,
+		birdUrl: string | null,
+		fallback: { commonName: string | null; imageUrl: string | null },
+	) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
@@ -59,41 +67,59 @@ export function SessionAccordion({
 			>
 				<SessionHeader session={session} expanded={expanded} />
 			</button>
-			{expanded && session.detections.length > 0 ?
-				<div className='flex flex-col gap-3 px-3 pb-3'>
-					{session.detections.map((d) => {
-						const lifeEntry = index.lifeList[d.scientific_name];
-						return (
-							<DetectionCard
-								key={d.scientific_name}
-								detection={d}
-								countLabel={`Heard ${d.count}× in session`}
-								isNewToday={isNewToday(
-									lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
-								)}
-								onCopyUrl={handleCopy}
-							/>
-						);
-					})}
+			<div
+				className='grid transition-[grid-template-rows] duration-[420ms] ease-in-out'
+				style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
+			>
+				<div className='overflow-hidden'>
+					{session.detections.length > 0 ?
+						<div className='flex flex-col gap-3 px-3 pb-3'>
+							{session.detections.map((d) => {
+								const lifeEntry = index.lifeList[d.scientific_name];
+								return (
+									<DetectionCard
+										key={d.scientific_name}
+										detection={d}
+										countLabel={`Heard ${d.count}× in session`}
+										isNewToday={isNewToday(
+											lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
+										)}
+										onCopyUrl={handleCopy}
+										onTap={onSelectSpecies ? (det) => {
+											onSelectSpecies(
+												det.scientific_name,
+												{
+													firstIdentifiedAt: lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
+													lastDetectedAt: d.lastDetectedAt,
+													detectionCount: d.count,
+												},
+												buildBirdDetailsUrl(det),
+												{
+													commonName: displayCommonName(det),
+													imageUrl: det.image_url || null,
+												},
+											);
+										} : undefined}
+									/>
+								);
+							})}
+						</div>
+					:	<div className='px-4 pb-4 text-detail text-text-dim'>
+							No birds detected in this session.
+						</div>
+					}
+					<div className='px-4 pb-4'>
+						<Button
+							variant='danger'
+							onClick={handleDeleteSession}
+							disabled={isDeleting}
+							className='birdie-quiet-button w-full'
+						>
+							{isDeleting ? 'Deleting…' : 'Delete session'}
+						</Button>
+					</div>
 				</div>
-			:	null}
-			{expanded && session.detections.length === 0 ?
-				<div className='px-4 pb-4 text-detail text-text-dim'>
-					No birds detected in this session.
-				</div>
-			:	null}
-			{expanded ?
-				<div className='px-4 pb-4'>
-					<Button
-						variant='danger'
-						onClick={handleDeleteSession}
-						disabled={isDeleting}
-						className='birdie-quiet-button w-full'
-					>
-						{isDeleting ? 'Deleting…' : 'Delete session'}
-					</Button>
-				</div>
-			:	null}
+			</div>
 		</Card>
 	);
 }

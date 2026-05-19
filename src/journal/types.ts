@@ -23,6 +23,7 @@ export interface JournalSessionDetection {
 	count: number;
 	firstDetectedAt: number;
 	lastDetectedAt: number;
+	rarity?: { tier: import('../net/detail-types').RarityTier; localCount90d: number } | null;
 }
 
 export interface JournalSession {
@@ -46,6 +47,7 @@ export interface JournalLifeListEntry {
 	detectionCount: number;
 	bestConfidence: number;
 	sessions: SessionId[];
+	rarity?: { tier: import('../net/detail-types').RarityTier; localCount90d: number } | null;
 }
 
 export interface JournalIndex {

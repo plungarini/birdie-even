@@ -1,23 +1,7 @@
-export type Env = {
-	BIRDNET_API_KEY: string;
-	BIRDNET_SERVER_URL: string;
-	ALLOWED_ORIGIN: string;
-	EBIRD_API_TOKEN: string;
-	XENO_CANTO_API_KEY: string;
-};
-
 export type RarityTier = 'legendary' | 'rare' | 'uncommon' | 'common' | 'very_common';
-
 export type IucnStatus = 'LC' | 'NT' | 'VU' | 'EN' | 'CR' | 'EW' | 'EX' | 'DD';
 
-export interface BirdDetailRequest {
-	scientificName: string;
-	locale?: string;
-	lat?: number;
-	lng?: number;
-}
-
-export interface BirdDetailResponse {
+export interface BirdDetail {
 	identity: {
 		inatTaxonId: number;
 		gbifTaxonKey: number;
@@ -98,36 +82,15 @@ export interface BirdDetailResponse {
 	} | null;
 }
 
-export interface TaxonomyInfo {
-	scientific_name: string;
-	common_name: string;
-	species_code: string;
-	category: string;
-	taxon_order: number;
-	com_name_codes: string;
-	sci_name_codes: string;
-	banding_codes: string;
-	order: string;
-	family_com_name: string;
-	family_sci_name: string;
-	report_as: string;
-	extinct: boolean;
-	extinct_year: number | null;
-	family_code: string;
-}
-
-export interface EnrichedSpecies {
-	image_url: string;
-	taxonomy: TaxonomyInfo | null;
-}
-
-export interface EnrichRequestBody {
-	species?: unknown;
-	locale?: unknown;
-}
-
-export interface EnrichResponse {
+export interface BirdDetailRequest {
+	scientificName: string;
 	locale?: string;
-	results: Record<string, EnrichedSpecies>;
-	errors?: Record<string, string>;
+	lat?: number;
+	lng?: number;
+}
+
+export interface PersonalStats {
+	firstIdentifiedAt: number;
+	lastDetectedAt: number;
+	detectionCount: number;
 }
