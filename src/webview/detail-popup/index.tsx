@@ -90,6 +90,26 @@ export function BirdDetailPopup({
 		};
 	}, [scientificName, userLocale, userLat, userLng]);
 
+	// Preload full-res gallery images during browser idle time
+	// so the lightbox opens instantly on slow connections.
+	useEffect(() => {
+		if (!detail?.media.gallery.length) return;
+		const urls = detail.media.gallery.map((p) => p.largeUrl);
+		const w = window as Window & {
+			requestIdleCallback?: (cb: () => void) => number;
+			cancelIdleCallback?: (id: number) => void;
+		};
+		const schedule = w.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 200));
+		const cancel = w.cancelIdleCallback ?? window.clearTimeout;
+		const handle = schedule(() => {
+			for (const url of urls) {
+				const img = new Image();
+				img.src = url;
+			}
+		});
+		return () => cancel(handle as number);
+	}, [detail]);
+
 	const isOpen = visible && !closing;
 
 	return (
