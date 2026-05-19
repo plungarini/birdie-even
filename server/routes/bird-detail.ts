@@ -1,12 +1,20 @@
 import type { Hono } from 'hono';
 import { corsHeaders } from '../lib/cors';
+import { buildGbifTileUrlTemplate, searchGbifTaxonKey } from '../lib/gbif';
+import {
+	computeDistanceKm,
+	fetchInatObservations,
+	fetchInatTaxon,
+	searchInatTaxonId,
+} from '../lib/inaturalist';
 import { resolveWorkerLocale } from '../lib/locales';
-import { searchInatTaxonId, fetchInatTaxon, fetchInatObservations, computeDistanceKm } from '../lib/inaturalist';
-import { fetchWikipediaSummary, fetchWikipediaExtracts } from '../lib/wikipedia';
-import { fetchXenoCantoRecordings } from '../lib/xeno-canto';
-import { searchGbifTaxonKey, buildGbifTileUrlTemplate } from '../lib/gbif';
 import { computeRarityFromObservations } from '../lib/rarity';
-import type { BirdDetailRequest, BirdDetailResponse, Env, RarityTier } from '../types';
+import {
+	fetchWikipediaExtracts,
+	fetchWikipediaSummary,
+} from '../lib/wikipedia';
+import { fetchXenoCantoRecordings } from '../lib/xeno-canto';
+import type { BirdDetailRequest, BirdDetailResponse, Env } from '../types';
 
 function normalizeLocale(raw: string | null | undefined): string {
 	return resolveWorkerLocale(raw);
@@ -14,11 +22,23 @@ function normalizeLocale(raw: string | null | undefined): string {
 
 export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 	app.options('/bird-detail', (c) => {
-		return new Response(null, { status: 204, headers: corsHeaders(c.env.ALLOWED_ORIGIN) });
+		return new Response(null, {
+			status: 204,
+			headers: corsHeaders(c.env.ALLOWED_ORIGIN),
+		});
 	});
 
 	app.post('/bird-detail', async (c) => {
-		const origin = c.env.ALLOWED_ORIGIN;
+		// Use the client's Origin header for XC proxy URLs so the browser
+		// resolves /xc/* correctly. Falls back to the Worker's own origin.
+		//
+		// ASSUMPTION (production topology): the client's origin must proxy
+		// /xc/* to this Worker. In dev, Vite's proxy rule handles this. If
+		// in production the client and Worker live on separate origins with
+		// no shared reverse-proxy in front, audio URLs built from the client
+		// origin will 404.
+		const origin =
+			c.req.header('Origin') ?? new URL(c.req.url).origin;
 		const requestStartedAt = Date.now();
 
 		let body: BirdDetailRequest;
@@ -30,12 +50,19 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 
 		const scientificName = body.scientificName?.trim();
 		if (!scientificName) {
-			return c.json({ error: 'scientificName is required' }, 400, corsHeaders(origin));
+			return c.json(
+				{ error: 'scientificName is required' },
+				400,
+				corsHeaders(origin),
+			);
 		}
 
 		const locale = normalizeLocale(body.locale);
-		const hasPosition = typeof body.lat === 'number' && typeof body.lng === 'number' &&
-			Number.isFinite(body.lat) && Number.isFinite(body.lng);
+		const hasPosition =
+			typeof body.lat === 'number' &&
+			typeof body.lng === 'number' &&
+			Number.isFinite(body.lat) &&
+			Number.isFinite(body.lng);
 		const lat = hasPosition ? body.lat! : null;
 		const lng = hasPosition ? body.lng! : null;
 
@@ -52,38 +79,60 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 		]);
 
 		if (!inatTaxonId) {
-			console.warn('[birdie-proxy] bird-detail: could not resolve inatTaxonId', { scientificName });
+			console.warn(
+				'[birdie-proxy] bird-detail: could not resolve inatTaxonId',
+				{ scientificName },
+			);
 		}
 		if (!gbifTaxonKey) {
-			console.warn('[birdie-proxy] bird-detail: could not resolve gbifTaxonKey', { scientificName });
+			console.warn(
+				'[birdie-proxy] bird-detail: could not resolve gbifTaxonKey',
+				{ scientificName },
+			);
 		}
 
 		const sources = await Promise.allSettled([
 			inatTaxonId ? fetchInatTaxon(inatTaxonId, locale) : Promise.resolve(null),
-			hasPosition && inatTaxonId ? fetchInatObservations(inatTaxonId, lat!, lng!) : Promise.resolve(null),
+			hasPosition && inatTaxonId ?
+				fetchInatObservations(inatTaxonId, lat!, lng!)
+			:	Promise.resolve(null),
 			fetchWikipediaSummary(scientificName, locale),
 			fetchWikipediaExtracts(scientificName, locale),
-			fetchXenoCantoRecordings(scientificName, c.env.XENO_CANTO_API_KEY),
+			fetchXenoCantoRecordings(
+				scientificName,
+				c.env.XENO_CANTO_API_KEY,
+				origin,
+			),
 		]);
 
-		const inatTaxon = sources[0].status === 'fulfilled' ? sources[0].value : null;
+		const inatTaxon =
+			sources[0].status === 'fulfilled' ? sources[0].value : null;
 		const inatObs = sources[1].status === 'fulfilled' ? sources[1].value : null;
-		const wikiSummary = sources[2].status === 'fulfilled' ? sources[2].value : null;
-		const wikiExtracts = sources[3].status === 'fulfilled' ? sources[3].value : null;
-		const xcResult = sources[4].status === 'fulfilled' ? sources[4].value : null;
+		const wikiSummary =
+			sources[2].status === 'fulfilled' ? sources[2].value : null;
+		const wikiExtracts =
+			sources[3].status === 'fulfilled' ? sources[3].value : null;
+		const xcResult =
+			sources[4].status === 'fulfilled' ? sources[4].value : null;
 
 		const commonName = inatTaxon?.preferred_common_name?.trim() || null;
-		const family = inatTaxon?.ancestors?.find((a) => a.rank === 'family')?.name ?? null;
-		const order = inatTaxon?.ancestors?.find((a) => a.rank === 'order')?.name ?? null;
-		const classVal = inatTaxon?.ancestors?.find((a) => a.rank === 'class')?.name ?? null;
+		const family =
+			inatTaxon?.ancestors?.find((a) => a.rank === 'family')?.name ?? null;
+		const order =
+			inatTaxon?.ancestors?.find((a) => a.rank === 'order')?.name ?? null;
+		const classVal =
+			inatTaxon?.ancestors?.find((a) => a.rank === 'class')?.name ?? null;
 
-		const heroPhoto = inatTaxon?.default_photo
-			? {
-					url: inatTaxon.default_photo.medium_url || inatTaxon.default_photo.original_url,
+		const heroPhoto =
+			inatTaxon?.default_photo ?
+				{
+					url:
+						inatTaxon.default_photo.medium_url ||
+						inatTaxon.default_photo.original_url,
 					attribution: inatTaxon.default_photo.attribution,
 					license: inatTaxon.default_photo.license_code,
 				}
-			: null;
+			:	null;
 
 		const gallery = (inatTaxon?.taxon_photos ?? [])
 			.filter((tp) => tp.photo)
@@ -104,17 +153,19 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 		const taglineShort = wikiSummary?.extract?.trim() || null;
 		const wikipediaUrl = wikiSummary?.content_urls?.desktop?.page ?? null;
 
-		const iucnStatusRaw = inatTaxon?.conservation_statuses
-			?.filter((cs) => cs.place_id === null || cs.place_id === undefined)
-			.map((cs) => cs.status)[0] ?? null;
+		const iucnStatusRaw =
+			inatTaxon?.conservation_statuses
+				?.filter((cs) => cs.place_id === null || cs.place_id === undefined)
+				.map((cs) => cs.status)[0] ?? null;
 		const iucnStatus = isValidIucn(iucnStatusRaw) ? iucnStatusRaw : null;
 
-		const rarity = hasPosition && inatObs
-			? {
-					...(computeRarityFromObservations(inatObs)!),
+		const rarity =
+			hasPosition && inatObs ?
+				{
+					...computeRarityFromObservations(inatObs)!,
 					lastSeenNearby: buildLastSeenNearby(inatObs, lat!, lng!),
 				}
-			: null;
+			:	null;
 
 		const nearbyPins = (inatObs?.results ?? [])
 			.filter((r) => r.geojson?.coordinates)
@@ -129,9 +180,8 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 				};
 			});
 
-		const globalTileUrlTemplate = gbifTaxonKey
-			? buildGbifTileUrlTemplate(gbifTaxonKey)
-			: null;
+		const globalTileUrlTemplate =
+			gbifTaxonKey ? buildGbifTileUrlTemplate(gbifTaxonKey) : null;
 
 		const response: BirdDetailResponse = {
 			identity: {
@@ -166,12 +216,13 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 			},
 			recordings: xcResult?.recordings ?? [],
 			rarity,
-			map: hasPosition
-				? {
+			map:
+				hasPosition ?
+					{
 						globalTileUrlTemplate: globalTileUrlTemplate ?? '',
 						nearbyPins,
 					}
-				: null,
+				:	null,
 		};
 
 		if (hasPosition && !globalTileUrlTemplate) {

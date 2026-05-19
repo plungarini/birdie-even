@@ -60,7 +60,6 @@ export interface BirdDetailResponse {
 	recordings: Array<{
 		id: string;
 		audioUrl: string;
-		spectrogramUrl: string | null;
 		types: string[];
 		lengthSeconds: number | null;
 		country: string | null;
