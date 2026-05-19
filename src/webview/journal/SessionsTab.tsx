@@ -11,6 +11,7 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 	const [popupTarget, setPopupTarget] = useState<{
 		scientificName: string;
 		personalStats: PersonalStats;
+		birdUrl: string | null;
 	} | null>(null);
 
 	useEffect(() => {
@@ -42,8 +43,12 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 		);
 	}
 
-	function handleSelectSpecies(scientificName: string, personalStats: PersonalStats) {
-		setPopupTarget({ scientificName, personalStats });
+	function handleSelectSpecies(
+		scientificName: string,
+		personalStats: PersonalStats,
+		birdUrl: string | null,
+	) {
+		setPopupTarget({ scientificName, personalStats, birdUrl });
 	}
 
 	return (
@@ -64,6 +69,7 @@ export function SessionsTab({ onToast }: { onToast: (msg: string) => void }) {
 					scientificName={popupTarget.scientificName}
 					onClose={() => setPopupTarget(null)}
 					personalStats={popupTarget.personalStats}
+					birdUrl={popupTarget.birdUrl}
 				/>
 			)}
 		</>

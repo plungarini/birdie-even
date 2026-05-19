@@ -244,6 +244,7 @@ export function HomeView() {
 					personalStats={popupPersonalStats(
 						state.detectionsByKey[popupSpecies.scientific_name],
 					)}
+					birdUrl={buildBirdDetailsUrl(popupSpecies)}
 				/>
 			)}
 		</div>

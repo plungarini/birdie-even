@@ -18,7 +18,7 @@ export function SessionAccordion({
 }: {
 	session: JournalSession;
 	onCopyToast: (message: string) => void;
-	onSelectSpecies?: (sciName: string, personalStats: PersonalStats) => void;
+	onSelectSpecies?: (sciName: string, personalStats: PersonalStats, birdUrl: string | null) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
@@ -81,11 +81,15 @@ export function SessionAccordion({
 										)}
 										onCopyUrl={handleCopy}
 										onTap={onSelectSpecies ? (det) => {
-											onSelectSpecies(det.scientific_name, {
-												firstIdentifiedAt: lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
-												lastDetectedAt: d.lastDetectedAt,
-												detectionCount: d.count,
-											});
+											onSelectSpecies(
+												det.scientific_name,
+												{
+													firstIdentifiedAt: lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
+													lastDetectedAt: d.lastDetectedAt,
+													detectionCount: d.count,
+												},
+												buildBirdDetailsUrl(det),
+											);
 										} : undefined}
 									/>
 								);

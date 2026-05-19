@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { fetchBirdDetail } from '../../net/bird-detail';
 import type {
 	BirdDetail,
@@ -6,6 +6,7 @@ import type {
 	PersonalStats,
 } from '../../net/detail-types';
 import { getBirdiePreferences } from '../../preferences';
+import { copyTextWithExecCommand } from '../utils';
 import { ConservationSection } from './ConservationSection';
 import { DescriptionSection } from './DescriptionSection';
 import { GallerySection } from './GallerySection';
@@ -22,6 +23,7 @@ export interface BirdDetailPopupProps {
 	userLat?: number;
 	userLng?: number;
 	personalStats?: PersonalStats | null;
+	birdUrl?: string | null;
 	onClose: () => void;
 }
 
@@ -33,6 +35,7 @@ export function BirdDetailPopup({
 	userLat,
 	userLng,
 	personalStats,
+	birdUrl,
 	onClose,
 }: BirdDetailPopupProps) {
 	const [detail, setDetail] = useState<BirdDetail | null>(null);
@@ -40,7 +43,23 @@ export function BirdDetailPopup({
 	const [error, setError] = useState<string | null>(null);
 	const [visible, setVisible] = useState(false);
 	const [closing, setClosing] = useState(false);
+	const [copied, setCopied] = useState(false);
+	const copiedTimeoutRef = useRef<number | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (copiedTimeoutRef.current !== null) window.clearTimeout(copiedTimeoutRef.current);
+		};
+	}, []);
+
+	function handleCopyUrl() {
+		if (!birdUrl) return;
+		copyTextWithExecCommand(birdUrl);
+		setCopied(true);
+		if (copiedTimeoutRef.current !== null) window.clearTimeout(copiedTimeoutRef.current);
+		copiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 1800);
+	}
 
 	useEffect(() => {
 		const raf = requestAnimationFrame(() => setVisible(true));
@@ -120,10 +139,29 @@ export function BirdDetailPopup({
 				onClick={handleClose}
 			/>
 			<div
-				className={`relative z-10 max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl transition-transform duration-[420ms] ease-in-out ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}
+				className={`relative z-10 max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl transition-transform duration-[420ms] ease-in-out ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}
 			>
 				<div className='sticky top-0 z-50 flex items-center justify-between border-b border-border/20 bg-white/75 px-4 py-3 backdrop-blur-sm'>
-					<p className='text-detail font-semibold text-text'></p>
+					{birdUrl ? (
+						<button
+							type='button'
+							onClick={handleCopyUrl}
+							className={`birdie-copy-icon-button inline-flex h-8 w-auto min-w-0 items-center gap-1.5 rounded-full px-2.5 text-detail font-medium ${copied ? 'birdie-copy-icon-button--copied' : ''}`}
+							aria-label={copied ? 'eBird link copied' : 'Copy eBird link'}
+							title={copied ? 'eBird link copied' : 'Copy eBird link'}
+						>
+							{copied ? (
+								<CheckIcon width={16} height={16} className='shrink-0' />
+							) : (
+								<GlobeIcon width={16} height={16} className='shrink-0' />
+							)}
+							<span className='shrink-0 whitespace-nowrap'>
+								{copied ? 'Copied' : 'Copy eBird link'}
+							</span>
+						</button>
+					) : (
+						<span className='h-8 w-8' aria-hidden />
+					)}
 					<button
 						type='button'
 						onClick={handleClose}
@@ -168,5 +206,40 @@ function DetailContent({
 			<MapSection detail={detail} />
 			<StatsSection detail={detail} personalStats={personalStats} />
 		</div>
+	);
+}
+
+function GlobeIcon(props: React.SVGProps<SVGSVGElement>) {
+	return (
+		<svg
+			viewBox='0 0 24 24'
+			fill='none'
+			stroke='currentColor'
+			strokeWidth='1.85'
+			strokeLinecap='round'
+			strokeLinejoin='round'
+			{...props}
+		>
+			<circle cx='12' cy='12' r='8.5' />
+			<path d='M3.9 9h16.2' />
+			<path d='M3.9 15h16.2' />
+			<path d='M12 3.5c2.5 2.2 4 5.2 4 8.5s-1.5 6.3-4 8.5c-2.5-2.2-4-5.2-4-8.5s1.5-6.3 4-8.5Z' />
+		</svg>
+	);
+}
+
+function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
+	return (
+		<svg
+			viewBox='0 0 24 24'
+			fill='none'
+			stroke='currentColor'
+			strokeWidth='2'
+			strokeLinecap='round'
+			strokeLinejoin='round'
+			{...props}
+		>
+			<path d='m6.5 12.5 3.4 3.4 7.6-8.1' />
+		</svg>
 	);
 }

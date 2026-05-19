@@ -57,6 +57,7 @@ export function LifeListTab({ onToast }: { onToast: (msg: string) => void }) {
 	const [popupSpecies, setPopupSpecies] = useState<{
 		scientificName: string;
 		personalStats: PersonalStats;
+		birdUrl: string | null;
 	} | null>(null);
 	const entries = orderedLifeList(getJournalIndex());
 	const tokens = useMemo(() => normalizeQuery(query), [query]);
@@ -86,6 +87,7 @@ export function LifeListTab({ onToast }: { onToast: (msg: string) => void }) {
 						detectionCount: entry.detectionCount,
 					}
 				: { firstIdentifiedAt: 0, lastDetectedAt: 0, detectionCount: 0 },
+			birdUrl: buildBirdDetailsUrl(detection),
 		});
 	}
 
@@ -160,6 +162,7 @@ export function LifeListTab({ onToast }: { onToast: (msg: string) => void }) {
 					scientificName={popupSpecies.scientificName}
 					onClose={() => setPopupSpecies(null)}
 					personalStats={popupSpecies.personalStats}
+					birdUrl={popupSpecies.birdUrl}
 				/>
 			)}
 		</>
