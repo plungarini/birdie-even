@@ -1,5 +1,9 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
-import { detectBrowserLocale, resolveSupportedLocale, type SupportedBirdieLocale } from './locale';
+import {
+	detectBrowserLocale,
+	resolveSupportedLocale,
+	type SupportedBirdieLocale,
+} from './locale';
 import type { AnalyzeRequestPreferences } from './net/types';
 
 export type BirdieMicrophoneSource = 'g2' | 'phone';
@@ -17,6 +21,7 @@ export interface BirdiePreferences {
 	locationLon: number | null;
 	locale: SupportedBirdieLocale;
 	keepEmptySessions: boolean;
+	sessionShowCity: boolean;
 }
 
 export interface BirdiePreferencesState {
@@ -40,6 +45,7 @@ const STORAGE_KEYS = {
 	locationLon: 'birdie.preferences.locationLon',
 	locale: 'birdie.preferences.locale',
 	keepEmptySessions: 'birdie.preferences.keepEmptySessions',
+	sessionShowCity: 'birdie.preferences.sessionShowCity',
 } satisfies Record<keyof BirdiePreferences, string>;
 
 export const preferenceRanges = Object.freeze({
@@ -55,7 +61,7 @@ export const defaultBirdiePreferences: BirdiePreferences = Object.freeze({
 	microphoneSource: 'g2',
 	threshold: 0.6,
 	sensitivity: 1,
-	inferenceIntervalMs: 10_000,
+	inferenceIntervalMs: 20_000,
 	micGain: 1,
 	overlap: 0,
 	week48: -1,
@@ -64,6 +70,7 @@ export const defaultBirdiePreferences: BirdiePreferences = Object.freeze({
 	locationLon: null,
 	locale: 'en_us',
 	keepEmptySessions: false,
+	sessionShowCity: true,
 });
 
 let bridge: EvenAppBridge | null = null;
@@ -90,7 +97,9 @@ function round(value: number, digits: number): number {
 	return Math.round(value * factor) / factor;
 }
 
-function sanitizePreferences(input: Partial<BirdiePreferences>): BirdiePreferences {
+function sanitizePreferences(
+	input: Partial<BirdiePreferences>,
+): BirdiePreferences {
 	return {
 		microphoneSource: input.microphoneSource === 'phone' ? 'phone' : 'g2',
 		threshold: round(
@@ -112,7 +121,10 @@ function sanitizePreferences(input: Partial<BirdiePreferences>): BirdiePreferenc
 		inferenceIntervalMs:
 			Math.round(
 				clamp(
-					Number(input.inferenceIntervalMs ?? defaultBirdiePreferences.inferenceIntervalMs),
+					Number(
+						input.inferenceIntervalMs ??
+							defaultBirdiePreferences.inferenceIntervalMs,
+					),
 					preferenceRanges.inferenceIntervalMs.min,
 					preferenceRanges.inferenceIntervalMs.max,
 				) / preferenceRanges.inferenceIntervalMs.step,
@@ -140,27 +152,46 @@ function sanitizePreferences(input: Partial<BirdiePreferences>): BirdiePreferenc
 				preferenceRanges.week48.max,
 			),
 		),
-		returnAllDetections: Boolean(input.returnAllDetections ?? defaultBirdiePreferences.returnAllDetections),
+		returnAllDetections: Boolean(
+			input.returnAllDetections ?? defaultBirdiePreferences.returnAllDetections,
+		),
 		locationLat:
-			typeof input.locationLat === 'number' && Number.isFinite(input.locationLat)
-				? round(clamp(input.locationLat, -90, 90), 6)
-				: null,
+			(
+				typeof input.locationLat === 'number' &&
+				Number.isFinite(input.locationLat)
+			) ?
+				round(clamp(input.locationLat, -90, 90), 6)
+			:	null,
 		locationLon:
-			typeof input.locationLon === 'number' && Number.isFinite(input.locationLon)
-				? round(clamp(input.locationLon, -180, 180), 6)
-				: null,
-		locale: resolveSupportedLocale(input.locale ?? defaultBirdiePreferences.locale),
-		keepEmptySessions: Boolean(input.keepEmptySessions ?? defaultBirdiePreferences.keepEmptySessions),
+			(
+				typeof input.locationLon === 'number' &&
+				Number.isFinite(input.locationLon)
+			) ?
+				round(clamp(input.locationLon, -180, 180), 6)
+			:	null,
+		locale: resolveSupportedLocale(
+			input.locale ?? defaultBirdiePreferences.locale,
+		),
+		keepEmptySessions: Boolean(
+			input.keepEmptySessions ?? defaultBirdiePreferences.keepEmptySessions,
+		),
+		sessionShowCity: Boolean(
+			input.sessionShowCity ?? defaultBirdiePreferences.sessionShowCity,
+		),
 	};
 }
 
-function parseStoredValue<K extends keyof BirdiePreferences>(key: K, raw: string): BirdiePreferences[K] | undefined {
+function parseStoredValue<K extends keyof BirdiePreferences>(
+	key: K,
+	raw: string,
+): BirdiePreferences[K] | undefined {
 	if (!raw) return undefined;
 	switch (key) {
 		case 'microphoneSource':
-			return ((raw === 'phone' ? 'phone' : 'g2') as BirdiePreferences[K]);
+			return (raw === 'phone' ? 'phone' : 'g2') as BirdiePreferences[K];
 		case 'returnAllDetections':
 		case 'keepEmptySessions':
+		case 'sessionShowCity':
 			return (raw === 'true') as BirdiePreferences[K];
 		case 'locationLat':
 		case 'locationLon': {
@@ -176,7 +207,9 @@ function parseStoredValue<K extends keyof BirdiePreferences>(key: K, raw: string
 	}
 }
 
-function serializeStoredValue(value: BirdiePreferences[keyof BirdiePreferences]): string {
+function serializeStoredValue(
+	value: BirdiePreferences[keyof BirdiePreferences],
+): string {
 	if (value === null || value === undefined) return '';
 	if (typeof value === 'boolean') return value ? 'true' : 'false';
 	return String(value);
@@ -203,7 +236,9 @@ async function flushDirtyKeys(): Promise<void> {
 	);
 }
 
-export async function initPreferences(nextBridge: EvenAppBridge): Promise<void> {
+export async function initPreferences(
+	nextBridge: EvenAppBridge,
+): Promise<void> {
 	bridge = nextBridge;
 	if (hydratePromise) {
 		await hydratePromise;
@@ -214,24 +249,31 @@ export async function initPreferences(nextBridge: EvenAppBridge): Promise<void> 
 	hydratePromise = (async () => {
 		let localeWasStored = false;
 		const loaded = await Promise.all(
-			(Object.keys(STORAGE_KEYS) as Array<keyof BirdiePreferences>).map(async (key) => {
-				try {
-					const raw = await nextBridge.getLocalStorage(STORAGE_KEYS[key]);
-					if (key === 'locale' && raw) {
-						localeWasStored = true;
+			(Object.keys(STORAGE_KEYS) as Array<keyof BirdiePreferences>).map(
+				async (key) => {
+					try {
+						const raw = await nextBridge.getLocalStorage(STORAGE_KEYS[key]);
+						if (key === 'locale' && raw) {
+							localeWasStored = true;
+						}
+						return [key, parseStoredValue(key, raw)] as const;
+					} catch (err) {
+						console.warn('[birdie] preference load failed', { key, err });
+						return [key, undefined] as const;
 					}
-					return [key, parseStoredValue(key, raw)] as const;
-				} catch (err) {
-					console.warn('[birdie] preference load failed', { key, err });
-					return [key, undefined] as const;
-				}
-			}),
+				},
+			),
 		);
 
 		const partial: Partial<BirdiePreferences> = {};
 		for (const [key, value] of loaded) {
 			if (value !== undefined) {
-				(partial as Record<keyof BirdiePreferences, BirdiePreferences[keyof BirdiePreferences]>)[key] = value;
+				(
+					partial as Record<
+						keyof BirdiePreferences,
+						BirdiePreferences[keyof BirdiePreferences]
+					>
+				)[key] = value;
 			}
 		}
 		if (partial.locale === undefined) {
@@ -266,12 +308,14 @@ export function getBirdiePreferences(): BirdiePreferences {
 	return state.values;
 }
 
-export function updateBirdiePreferences(patch: Partial<BirdiePreferences>): void {
+export function updateBirdiePreferences(
+	patch: Partial<BirdiePreferences>,
+): void {
 	const previous = state.values;
 	const next = sanitizePreferences({ ...previous, ...patch });
-	const changedKeys = (Object.keys(STORAGE_KEYS) as Array<keyof BirdiePreferences>).filter(
-		(key) => previous[key] !== next[key],
-	);
+	const changedKeys = (
+		Object.keys(STORAGE_KEYS) as Array<keyof BirdiePreferences>
+	).filter((key) => previous[key] !== next[key]);
 	if (changedKeys.length === 0) return;
 
 	state = { ...state, values: next };
