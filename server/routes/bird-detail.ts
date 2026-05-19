@@ -1,9 +1,11 @@
 import type { Hono } from 'hono';
 import { corsHeaders } from '../lib/cors';
 import { buildGbifTileUrlTemplate, searchGbifTaxonKey } from '../lib/gbif';
+import { fetchIucnInfo, type IucnCode } from '../lib/iucn';
 import {
 	computeDistanceKm,
 	fetchInatObservations,
+	fetchInatPlaceId,
 	fetchInatTaxon,
 	searchInatTaxonId,
 } from '../lib/inaturalist';
@@ -73,9 +75,10 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 			originHeader: c.req.header('origin') ?? null,
 		});
 
-		const [inatTaxonId, gbifTaxonKey] = await Promise.all([
+		const [inatTaxonId, gbifTaxonKey, inatPlaceId] = await Promise.all([
 			searchInatTaxonId(scientificName),
 			searchGbifTaxonKey(scientificName),
+			hasPosition ? fetchInatPlaceId(lat!, lng!) : Promise.resolve(null),
 		]);
 
 		if (!inatTaxonId) {
@@ -92,7 +95,7 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 		}
 
 		const sources = await Promise.allSettled([
-			inatTaxonId ? fetchInatTaxon(inatTaxonId, locale) : Promise.resolve(null),
+			inatTaxonId ? fetchInatTaxon(inatTaxonId, locale, inatPlaceId) : Promise.resolve(null),
 			hasPosition && inatTaxonId ?
 				fetchInatObservations(inatTaxonId, lat!, lng!)
 			:	Promise.resolve(null),
@@ -156,11 +159,44 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 		const taglineShort = wikiSummary?.extract?.trim() || null;
 		const wikipediaUrl = wikiSummary?.content_urls?.desktop?.page ?? null;
 
+		// IUCN status: prefer the singular conservation_status (always the IUCN one in iNat),
+		// then look for an IUCN-authority entry in the array, then any global entry.
+		const singular = inatTaxon?.conservation_status ?? null;
+		const allStatuses = inatTaxon?.conservation_statuses ?? [];
+		const iucnFromArray = allStatuses.find(
+			(cs) => cs.authority?.toLowerCase().includes('iucn'),
+		);
+		const globalFromArray = allStatuses.find(
+			(cs) => cs.place_id === null || cs.place_id === undefined,
+		);
 		const iucnStatusRaw =
-			inatTaxon?.conservation_statuses
-				?.filter((cs) => cs.place_id === null || cs.place_id === undefined)
-				.map((cs) => cs.status)[0] ?? null;
+			singular?.status ?? iucnFromArray?.status ?? globalFromArray?.status ?? null;
 		const iucnStatus = isValidIucn(iucnStatusRaw) ? iucnStatusRaw : null;
+
+		// Establishment (native/introduced/endemic) is derived from the place-specific
+		// `establishment_means` field — only populated when place_id was passed to iNat.
+		const em = inatTaxon?.establishment_means?.establishment_means ?? null;
+		const native = em === 'native' ? true : null;
+		const introduced = em === 'introduced' ? true : null;
+		const endemic = em === 'endemic' ? true : null;
+
+		// Threatened is derived from IUCN status (VU/EN/CR/EW/EX).
+		const threatened =
+			iucnStatus !== null ?
+				['VU', 'EN', 'CR', 'EW', 'EX'].includes(iucnStatus)
+			:	null;
+
+		// Fetch localized IUCN explanation (label + Wikipedia blurb) only if we have a status.
+		const redListUrl =
+			singular?.url ??
+			allStatuses.find((cs) => cs.authority?.toLowerCase().includes('iucn'))?.url ??
+			null;
+		const iucnInfo =
+			iucnStatus !== null ?
+				await fetchIucnInfo(iucnStatus as IucnCode, locale, redListUrl ?? null).catch(
+					() => null,
+				)
+			:	null;
 
 		const rarity =
 			hasPosition && inatObs ?
@@ -208,10 +244,11 @@ export function registerBirdDetailRoute(app: Hono<{ Bindings: Env }>): void {
 			},
 			conservation: {
 				iucnStatus,
-				native: inatTaxon?.native ?? null,
-				introduced: inatTaxon?.introduced ?? null,
-				endemic: inatTaxon?.endemic ?? null,
-				threatened: inatTaxon?.threatened ?? null,
+				iucnInfo,
+				native,
+				introduced,
+				endemic,
+				threatened,
 			},
 			stats: {
 				globalObservationsCount: inatTaxon?.observations_count ?? null,

@@ -8,7 +8,7 @@ export const CACHE_TTL = {
 	upstreamError: 60,
 } as const;
 
-const CACHE_NAMESPACE = 'https://cache.birdie.internal/v4/';
+const CACHE_NAMESPACE = 'https://cache.birdie.internal/v10/';
 
 function namespaceKey(...parts: string[]): Request {
 	return new Request(`${CACHE_NAMESPACE}${parts.map(encodeURIComponent).join('/')}`);

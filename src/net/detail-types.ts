@@ -30,6 +30,13 @@ export interface BirdDetail {
 
 	conservation: {
 		iucnStatus: IucnStatus | null;
+		iucnInfo: {
+			code: IucnStatus;
+			severityIndex: number;
+			label: string;
+			blurb: string | null;
+			redListUrl: string | null;
+		} | null;
 		native: boolean | null;
 		introduced: boolean | null;
 		endemic: boolean | null;
