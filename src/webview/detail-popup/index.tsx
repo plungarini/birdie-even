@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import type { BirdDetail, BirdDetailRequest, PersonalStats } from '../../net/detail-types';
 import { fetchBirdDetail } from '../../net/bird-detail';
+import type {
+	BirdDetail,
+	BirdDetailRequest,
+	PersonalStats,
+} from '../../net/detail-types';
 import { getBirdiePreferences } from '../../preferences';
-import { LoadingSkeleton } from './LoadingSkeleton';
-import { HeroSection } from './HeroSection';
-import { DescriptionSection } from './DescriptionSection';
 import { ConservationSection } from './ConservationSection';
-import { RaritySection } from './RaritySection';
-import { MapSection } from './MapSection';
-import { SoundsSection } from './SoundsSection';
+import { DescriptionSection } from './DescriptionSection';
 import { GallerySection } from './GallerySection';
+import { HeroSection } from './HeroSection';
+import { LoadingSkeleton } from './LoadingSkeleton';
+import { MapSection } from './MapSection';
+import { RaritySection } from './RaritySection';
+import { SoundsSection } from './SoundsSection';
 import { StatsSection } from './StatsSection';
 
 export interface BirdDetailPopupProps {
@@ -59,7 +63,9 @@ export function BirdDetailPopup({
 			})
 			.catch((err) => {
 				if (!abort.signal.aborted) {
-					setError(err instanceof Error ? err.message : 'Failed to load details');
+					setError(
+						err instanceof Error ? err.message : 'Failed to load details',
+					);
 					setLoading(false);
 				}
 			});
@@ -77,10 +83,8 @@ export function BirdDetailPopup({
 				onClick={onClose}
 			/>
 			<div className='relative z-10 max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl'>
-				<div className='sticky top-0 z-20 flex items-center justify-between border-b border-border/20 bg-white/95 px-4 py-3 backdrop-blur-sm'>
-					<p className='text-detail font-semibold text-text'>
-						{scientificName}
-					</p>
+				<div className='sticky top-0 z-50 flex items-center justify-between border-b border-border/20 bg-white/95 px-4 py-3 backdrop-blur-sm'>
+					<p className='text-detail font-semibold text-text'></p>
 					<button
 						type='button'
 						onClick={onClose}
@@ -99,7 +103,9 @@ export function BirdDetailPopup({
 					</div>
 				)}
 
-				{detail && !loading && <DetailContent detail={detail} personalStats={personalStats} />}
+				{detail && !loading && (
+					<DetailContent detail={detail} personalStats={personalStats} />
+				)}
 			</div>
 		</div>
 	);

@@ -2,7 +2,7 @@ import { Card } from 'even-toolkit/web';
 import type { BirdDetail } from '../../net/detail-types';
 
 export function DescriptionSection({ detail }: { detail: BirdDetail }) {
-	const { taglineShort, descriptionLong, descriptionIsFallback, wikipediaUrl } =
+	const { taglineShort, descriptionLong, descriptionIsFallback } =
 		detail.description;
 	const hasDescription = descriptionLong || taglineShort;
 	if (!hasDescription) return null;
