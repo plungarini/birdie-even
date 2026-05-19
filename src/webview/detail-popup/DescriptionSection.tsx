@@ -4,32 +4,44 @@ import type { BirdDetail } from '../../net/detail-types';
 export function DescriptionSection({ detail }: { detail: BirdDetail }) {
 	const { taglineShort, descriptionLong, descriptionIsFallback } =
 		detail.description;
-	const hasDescription = descriptionLong || taglineShort;
-	if (!hasDescription) return null;
+	const longText = descriptionLong?.trim() || null;
+	const shortText = taglineShort?.trim() || null;
+	const bodyText = longText ?? shortText;
+
+	if (!bodyText) {
+		return (
+			<Card padding='none' className='birdie-surface-card'>
+				<div className='birdie-card-body'>
+					<p className='birdie-section-kicker mb-1'>About</p>
+					<p className='text-detail text-text-dim'>
+						No description available from Wikipedia for this species.
+					</p>
+				</div>
+			</Card>
+		);
+	}
 
 	return (
 		<Card padding='none' className='birdie-surface-card'>
 			<div className='birdie-card-body flex flex-col gap-2'>
-				{descriptionLong && (
-					<div>
-						{descriptionLong
-							.split('\n')
-							.filter(Boolean)
-							.map((para, i) => (
-								<p
-									key={i}
-									className='text-normal-body text-text mb-2 leading-relaxed'
-								>
-									{para}
-								</p>
-							))}
-						{descriptionIsFallback && (
-							<p className='text-detail text-text-dim mt-1'>
-								(Description from iNaturalist)
+				<div>
+					{bodyText
+						.split('\n')
+						.filter(Boolean)
+						.map((para, i) => (
+							<p
+								key={i}
+								className='text-normal-body text-text mb-2 leading-relaxed'
+							>
+								{para}
 							</p>
-						)}
-					</div>
-				)}
+						))}
+					{descriptionIsFallback && longText && (
+						<p className='text-detail text-text-dim mt-1'>
+							(Description from iNaturalist)
+						</p>
+					)}
+				</div>
 				{/* {wikipediaUrl && (
 					<a
 						href={wikipediaUrl}
