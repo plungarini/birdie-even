@@ -25,6 +25,8 @@ export interface BirdDetailPopupProps {
 	onClose: () => void;
 }
 
+const ANIM_MS = 420;
+
 export function BirdDetailPopup({
 	scientificName,
 	userLocale,
@@ -36,7 +38,19 @@ export function BirdDetailPopup({
 	const [detail, setDetail] = useState<BirdDetail | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [visible, setVisible] = useState(false);
+	const [closing, setClosing] = useState(false);
 	const abortRef = useRef<AbortController | null>(null);
+
+	useEffect(() => {
+		const raf = requestAnimationFrame(() => setVisible(true));
+		return () => cancelAnimationFrame(raf);
+	}, []);
+
+	const handleClose = () => {
+		setClosing(true);
+		setTimeout(onClose, ANIM_MS + 20);
+	};
 
 	useEffect(() => {
 		const abort = new AbortController();
@@ -76,18 +90,22 @@ export function BirdDetailPopup({
 		};
 	}, [scientificName, userLocale, userLat, userLng]);
 
+	const isOpen = visible && !closing;
+
 	return (
 		<div className='fixed inset-0 z-50 flex items-end justify-center'>
 			<div
-				className='absolute inset-0 bg-black/30 backdrop-blur-sm'
-				onClick={onClose}
+				className={`absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-[420ms] ease-in-out ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+				onClick={handleClose}
 			/>
-			<div className='relative z-10 max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl'>
-				<div className='sticky top-0 z-50 flex items-center justify-between border-b border-border/20 bg-white/95 px-4 py-3 backdrop-blur-sm'>
+			<div
+				className={`relative z-10 max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl transition-transform duration-[420ms] ease-in-out ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}
+			>
+				<div className='sticky top-0 z-50 flex items-center justify-between border-b border-border/20 bg-white/75 px-4 py-3 backdrop-blur-sm'>
 					<p className='text-detail font-semibold text-text'></p>
 					<button
 						type='button'
-						onClick={onClose}
+						onClick={handleClose}
 						className='birdie-quiet-button flex h-8 w-8 items-center justify-center rounded-full p-0 text-sm'
 						aria-label='Close'
 					>
