@@ -99,7 +99,8 @@ export function BirdDetailPopup({
 			requestIdleCallback?: (cb: () => void) => number;
 			cancelIdleCallback?: (id: number) => void;
 		};
-		const schedule = w.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 200));
+		const schedule =
+			w.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 200));
 		const cancel = w.cancelIdleCallback ?? window.clearTimeout;
 		const handle = schedule(() => {
 			for (const url of urls) {
@@ -160,11 +161,11 @@ function DetailContent({
 		<div className='flex flex-col gap-4 p-4'>
 			<HeroSection detail={detail} />
 			<DescriptionSection detail={detail} />
+			<SoundsSection detail={detail} />
+			<GallerySection detail={detail} />
 			<ConservationSection detail={detail} />
 			{detail.rarity && <RaritySection detail={detail} />}
 			<MapSection detail={detail} />
-			<SoundsSection detail={detail} />
-			<GallerySection detail={detail} />
 			<StatsSection detail={detail} personalStats={personalStats} />
 		</div>
 	);
