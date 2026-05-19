@@ -1,11 +1,15 @@
 import { allIcons, Badge } from 'even-toolkit/web';
+import { useEffect, useState } from 'react';
 import type { JournalSession } from '../../journal';
+import { getBirdiePreferences } from '../../preferences';
+import { fetchCity } from '../../net/reverse-geocode';
 import { formatLocalizedDateTime } from '../utils';
 
 const IcChevronUp = allIcons['guide-chevron-small-drill-up'];
 
-function formatLocationLabel(session: JournalSession): string {
+function formatLocationLabel(session: JournalSession, city?: string | null): string {
 	if (session.location) {
+		if (city) return `📍 ${city}`;
 		return `📍 ${session.location.lat.toFixed(2)}°, ${session.location.lon.toFixed(2)}°`;
 	}
 	switch (session.locationStatus) {
@@ -44,10 +48,24 @@ const formatDuration = (seconds: number): string => {
 export function SessionHeader({
 	session,
 	expanded,
+	showCity = false,
 }: {
 	session: JournalSession;
 	expanded: boolean;
+	showCity?: boolean;
 }) {
+	const [city, setCity] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (!showCity || !session.location) return;
+		let cancelled = false;
+		const { locale } = getBirdiePreferences();
+		void fetchCity(session.location.lat, session.location.lon, locale).then((resolved) => {
+			if (!cancelled) setCity(resolved);
+		});
+		return () => { cancelled = true; };
+	}, [showCity, session.location]);
+
 	const count = session.detections.length;
 	const duration =
 		session.startedAt && session.endedAt ?
@@ -69,7 +87,7 @@ export function SessionHeader({
 				</div>
 				<div className='mt-1 flex flex-wrap items-center gap-2'>
 					<Badge variant='neutral' className='birdie-chip'>
-						{formatLocationLabel(session)}
+						{formatLocationLabel(session, showCity ? city : null)}
 					</Badge>
 					<Badge
 						variant={count > 0 ? 'positive' : 'neutral'}
