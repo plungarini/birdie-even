@@ -62,48 +62,51 @@ export function SessionAccordion({
 			>
 				<SessionHeader session={session} expanded={expanded} />
 			</button>
-			{expanded && session.detections.length > 0 ?
-				<div className='flex flex-col gap-3 px-3 pb-3'>
-					{session.detections.map((d) => {
-						const lifeEntry = index.lifeList[d.scientific_name];
-						return (
-							<DetectionCard
-								key={d.scientific_name}
-								detection={d}
-								countLabel={`Heard ${d.count}× in session`}
-								isNewToday={isNewToday(
-									lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
-								)}
-								onCopyUrl={handleCopy}
-								onTap={onSelectSpecies ? (det) => {
-									onSelectSpecies(det.scientific_name, {
-										firstIdentifiedAt: lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
-										lastDetectedAt: d.lastDetectedAt,
-										detectionCount: d.count,
-									});
-								} : undefined}
-							/>
-						);
-					})}
+			<div
+				className='grid transition-[grid-template-rows] duration-[420ms] ease-in-out'
+				style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
+			>
+				<div className='overflow-hidden'>
+					{session.detections.length > 0 ?
+						<div className='flex flex-col gap-3 px-3 pb-3'>
+							{session.detections.map((d) => {
+								const lifeEntry = index.lifeList[d.scientific_name];
+								return (
+									<DetectionCard
+										key={d.scientific_name}
+										detection={d}
+										countLabel={`Heard ${d.count}× in session`}
+										isNewToday={isNewToday(
+											lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
+										)}
+										onCopyUrl={handleCopy}
+										onTap={onSelectSpecies ? (det) => {
+											onSelectSpecies(det.scientific_name, {
+												firstIdentifiedAt: lifeEntry?.firstIdentifiedAt ?? d.firstDetectedAt,
+												lastDetectedAt: d.lastDetectedAt,
+												detectionCount: d.count,
+											});
+										} : undefined}
+									/>
+								);
+							})}
+						</div>
+					:	<div className='px-4 pb-4 text-detail text-text-dim'>
+							No birds detected in this session.
+						</div>
+					}
+					<div className='px-4 pb-4'>
+						<Button
+							variant='danger'
+							onClick={handleDeleteSession}
+							disabled={isDeleting}
+							className='birdie-quiet-button w-full'
+						>
+							{isDeleting ? 'Deleting…' : 'Delete session'}
+						</Button>
+					</div>
 				</div>
-			:	null}
-			{expanded && session.detections.length === 0 ?
-				<div className='px-4 pb-4 text-detail text-text-dim'>
-					No birds detected in this session.
-				</div>
-			:	null}
-			{expanded ?
-				<div className='px-4 pb-4'>
-					<Button
-						variant='danger'
-						onClick={handleDeleteSession}
-						disabled={isDeleting}
-						className='birdie-quiet-button w-full'
-					>
-						{isDeleting ? 'Deleting…' : 'Delete session'}
-					</Button>
-				</div>
-			:	null}
+			</div>
 		</Card>
 	);
 }
