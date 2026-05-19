@@ -15,7 +15,7 @@ export function alignRow(left: string, right: string, innerWidthPx: number): str
   return `${left}${spacesForPx(available)}${right}`;
 }
 
-export function centerLine(text: string, innerWidthPx: number): string {
-  const leftPx = Math.max(0, (innerWidthPx - WRAP_SAFETY_PX - getTextWidth(text)) / 2);
+export function centerLine(text: string, innerWidthPx: number, safetyPx: number = WRAP_SAFETY_PX): string {
+  const leftPx = Math.max(0, (innerWidthPx - safetyPx - getTextWidth(text)) / 2);
   return `${spacesForPx(leftPx)}${text}`;
 }

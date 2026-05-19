@@ -9,7 +9,19 @@ import {
 	TextContainerUpgrade,
 	type EvenAppBridge,
 } from '@evenrealities/even_hub_sdk';
-import { HUD_CONTENT_CHAR_LIMIT, HUD_HEIGHT, HUD_WIDTH, IMG_H, IMG_W, INFO_GAP, LISTEN_SLIM_W } from './constants';
+import {
+	HUD_CONTENT_CHAR_LIMIT,
+	HUD_HEIGHT,
+	HUD_WIDTH,
+	IMG_H,
+	IMG_W,
+	INFO_BODY_GAP,
+	INFO_FOOTER_H,
+	INFO_GAP,
+	INFO_HEADER_H,
+	LISTEN_SLIM_W,
+} from './constants';
+import { HOME_LAYOUT } from './home/layout';
 import type { HudLayoutDescriptor, HudRenderState } from './types';
 
 // Invisible full-size shadow event-capture container. Declared first so it
@@ -59,48 +71,83 @@ const STATIC_LAYOUT: HudLayoutDescriptor = {
 	],
 };
 
-// Listening layout — shadow capture + wave column + bird info text + image.
+// Listening layout — shadow capture + wave column + 3 info rows + image.
+// The middle column is split into header/body/footer text containers so the
+// bird's identity, summary, and badges can update independently.
+const INFO_X = LISTEN_SLIM_W + INFO_GAP;
+const INFO_W = HUD_WIDTH - LISTEN_SLIM_W - INFO_GAP - IMG_W;
+const INFO_HEADER_Y = 0;
+const INFO_BODY_Y = INFO_HEADER_Y + INFO_HEADER_H + INFO_BODY_GAP;
+const INFO_FOOTER_Y = HUD_HEIGHT - INFO_FOOTER_H;
+const INFO_BODY_H = INFO_FOOTER_Y - INFO_BODY_Y - INFO_BODY_GAP;
+
 const LISTENING_LAYOUT: HudLayoutDescriptor = {
-  key: 'birdie.listening.v1',
-  textDescriptors: [
-    SHADOW_CAPTURE,
-    {
-      containerID: 10,
-      containerName: 'wave',
-      xPosition: 0,
-      yPosition: 0,
-      width: LISTEN_SLIM_W,
+	key: 'birdie.listening.v2',
+	textDescriptors: [
+		SHADOW_CAPTURE,
+		{
+			containerID: 10,
+			containerName: 'wave',
+			xPosition: 0,
+			yPosition: 0,
+			width: LISTEN_SLIM_W,
 			height: HUD_HEIGHT,
 			paddingLength: 2,
 			borderWidth: 0,
 			isEventCapture: 0,
-    },
-    {
-      containerID: 11,
-      containerName: 'birdInfo',
-      xPosition: LISTEN_SLIM_W + INFO_GAP,
-      yPosition: 0,
-      width: HUD_WIDTH - LISTEN_SLIM_W - INFO_GAP - IMG_W,
-			height: HUD_HEIGHT,
-			paddingLength: 6,
+		},
+		{
+			containerID: 11,
+			containerName: 'birdHeader',
+			xPosition: INFO_X,
+			yPosition: INFO_HEADER_Y,
+			width: INFO_W,
+			height: INFO_HEADER_H,
+			paddingLength: 4,
+			borderWidth: 0,
+			isEventCapture: 0,
+		},
+		{
+			containerID: 12,
+			containerName: 'birdBody',
+			xPosition: INFO_X,
+			yPosition: INFO_BODY_Y,
+			width: INFO_W,
+			height: INFO_BODY_H,
+			paddingLength: 4,
+			borderWidth: 0,
+			isEventCapture: 0,
+		},
+		{
+			containerID: 13,
+			containerName: 'birdFooter',
+			xPosition: INFO_X,
+			yPosition: INFO_FOOTER_Y,
+			width: INFO_W,
+			height: INFO_FOOTER_H,
+			paddingLength: 4,
 			borderWidth: 0,
 			isEventCapture: 0,
 		},
 	],
-  imageDescriptors: [
-    {
-      containerID: 12,
-      containerName: 'birdImage',
-      xPosition: HUD_WIDTH - IMG_W,
-      yPosition: Math.floor((HUD_HEIGHT - IMG_H) / 2),
-      width: IMG_W,
+	imageDescriptors: [
+		{
+			containerID: 14,
+			containerName: 'birdImage',
+			xPosition: HUD_WIDTH - IMG_W,
+			yPosition: Math.floor((HUD_HEIGHT - IMG_H) / 2),
+			width: IMG_W,
 			height: IMG_H,
 		},
 	],
 };
 
+// Home / IDLE layout is owned by `hud/home/layout.ts` (corner-anchored
+// field-research HUD: wordmark TL, time TR, ● ready centre, location BL,
+// life-list BR). Re-exported via LAYOUTS for the renderer.
+
 export const LAYOUT = STATIC_LAYOUT; // backwards-compat named export
-export const LAYOUTS = { static: STATIC_LAYOUT, listening: LISTENING_LAYOUT };
+export const LAYOUTS = { static: STATIC_LAYOUT, listening: LISTENING_LAYOUT, home: HOME_LAYOUT };
 
 let pageCreated = false;
 let activeLayoutKey: string | null = null;
@@ -215,6 +262,7 @@ export class HudSession {
 	private currentLayout(): HudLayoutDescriptor | null {
 		if (activeLayoutKey === LAYOUTS.listening.key) return LAYOUTS.listening;
 		if (activeLayoutKey === LAYOUTS.static.key) return LAYOUTS.static;
+		if (activeLayoutKey === LAYOUTS.home.key) return LAYOUTS.home;
 		return null;
 	}
 
