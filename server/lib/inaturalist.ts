@@ -7,6 +7,19 @@ function localeForInat(raw: string | null | undefined): string {
 	return raw.replace(/_/g, '-').split('-')[0] || 'en';
 }
 
+export interface InatConservationStatus {
+	place_id: number | null;
+	status: string;
+	authority?: string;
+	iucn?: number;
+	url?: string;
+}
+
+export interface InatEstablishmentMeans {
+	establishment_means: 'native' | 'introduced' | 'endemic' | string;
+	place?: { id: number; name?: string };
+}
+
 export interface InatTaxonResult {
 	id: number;
 	name: string;
@@ -16,11 +29,9 @@ export interface InatTaxonResult {
 	observations_count: number;
 	wikipedia_summary: string | null;
 	ancestors: Array<{ rank: string; name: string }>;
-	native: boolean;
-	introduced: boolean;
-	endemic: boolean;
-	threatened: boolean;
-	conservation_statuses: Array<{ place_id: number | null; status: string }>;
+	conservation_status: InatConservationStatus | null;
+	conservation_statuses: InatConservationStatus[] | null;
+	establishment_means: InatEstablishmentMeans | null;
 }
 
 async function fetchJson<T>(url: string, abortSignal?: AbortSignal): Promise<T> {
@@ -56,17 +67,52 @@ export async function searchInatTaxonId(
 	}
 }
 
+export async function fetchInatPlaceId(
+	lat: number,
+	lng: number,
+	abortSignal?: AbortSignal,
+): Promise<number | null> {
+	const { latQ, lngQ } = coordinatesQuantized(lat, lng, 1.0);
+	const key = cacheKey('inaturalist', 'place', String(latQ), String(lngQ));
+	const cached = await cacheGet<{ id: number }>(key);
+	if (cached) return cached.id;
+
+	const buf = 0.5;
+	const url =
+		`${INAT_BASE}/places/nearby` +
+		`?nelat=${lat + buf}&nelng=${lng + buf}&swlat=${lat - buf}&swlng=${lng - buf}`;
+	try {
+		const data = await fetchJson<{ results: { standard: Array<{ id: number; bbox_area: number }> } }>(
+			url,
+			abortSignal,
+		);
+		const standard = data.results?.standard ?? [];
+		if (!standard.length) return null;
+		// Pick the smallest standard place that contains the point (most specific)
+		const place = standard.slice().sort((a, b) => a.bbox_area - b.bbox_area)[0];
+		await cacheSet(key, { id: place.id }, CACHE_TTL.inatTaxa);
+		return place.id;
+	} catch {
+		return null;
+	}
+}
+
 export async function fetchInatTaxon(
 	inatTaxonId: number,
 	locale: string | null | undefined,
+	placeId: number | null,
 	abortSignal?: AbortSignal,
 ): Promise<InatTaxonResult | null> {
 	const resolvedLocale = localeForInat(locale);
-	const key = cacheKey('inaturalist', 'taxa', String(inatTaxonId), resolvedLocale);
+	const key = cacheKey('inaturalist', 'taxa', String(inatTaxonId), resolvedLocale, String(placeId ?? 'global'));
 	const cached = await cacheGet<InatTaxonResult>(key);
 	if (cached) return cached;
 
-	const url = `${INAT_BASE}/taxa/${inatTaxonId}?locale=${encodeURIComponent(resolvedLocale)}`;
+	let url =
+		`${INAT_BASE}/taxa/${inatTaxonId}` +
+		`?locale=${encodeURIComponent(resolvedLocale)}`;
+	if (placeId !== null) url += `&place_id=${placeId}`;
+
 	try {
 		const data = await fetchJson<{ results: InatTaxonResult[] }>(url, abortSignal);
 		const result = data.results[0] ?? null;
