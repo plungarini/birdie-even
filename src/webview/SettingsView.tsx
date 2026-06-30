@@ -195,7 +195,7 @@ export function SettingsView() {
                   <option value="phone">Phone microphone</option>
                 </select>
                 <span className="birdie-setting-help">
-                  G2 uses the glasses mic through the Even bridge. Phone uses the webview microphone permission on this device.
+                  G2 uses the glasses mic through the Even bridge. Phone uses the phone's mic, also through the Even bridge.
                 </span>
               </label>
               <PreferenceSlider
