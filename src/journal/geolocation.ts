@@ -1,3 +1,5 @@
+import { AppLocationAccuracy, type AppLocationOptions } from '@evenrealities/even_hub_sdk';
+import { getJournalBridge } from './storage';
 import type { JournalLocation, LocationStatus } from './types';
 
 export interface LocationResult {
@@ -5,32 +7,32 @@ export interface LocationResult {
 	status: LocationStatus;
 }
 
-export function requestCurrentLocation(timeoutMs = 10_000): Promise<LocationResult> {
-	if (typeof navigator === 'undefined' || !navigator.geolocation) {
-		return Promise.resolve({ location: null, status: 'unavailable' });
+export async function requestCurrentLocation(timeoutMs = 10_000): Promise<LocationResult> {
+	const bridge = getJournalBridge();
+	if (!bridge) {
+		return { location: null, status: 'unavailable' };
 	}
-	return new Promise((resolve) => {
-		navigator.geolocation.getCurrentPosition(
-			(position) => {
-				resolve({
-					location: {
-						lat: position.coords.latitude,
-						lon: position.coords.longitude,
-						accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : undefined,
-					},
-					status: 'granted',
-				});
+
+	const options: AppLocationOptions = {
+		accuracy: AppLocationAccuracy.Medium,
+		timeoutMs,
+	};
+
+	try {
+		const result = await bridge.getAppLocation(options);
+		if (!result) {
+			return { location: null, status: 'unavailable' };
+		}
+		return {
+			location: {
+				lat: result.latitude,
+				lon: result.longitude,
+				accuracy: result.accuracy,
 			},
-			(error) => {
-				const status: LocationStatus =
-					error.code === error.PERMISSION_DENIED
-						? 'denied'
-						: error.code === error.POSITION_UNAVAILABLE
-							? 'unavailable'
-							: 'unavailable';
-				resolve({ location: null, status });
-			},
-			{ enableHighAccuracy: false, timeout: timeoutMs, maximumAge: 60_000 },
-		);
-	});
+			status: 'granted',
+		};
+	} catch (err) {
+		console.warn('[birdie] location request failed', err);
+		return { location: null, status: 'unavailable' };
+	}
 }
