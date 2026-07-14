@@ -2,7 +2,7 @@ import { Button, Card } from 'even-toolkit/web';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import appManifest from '../../app.json';
 import { config } from '../config';
-import { clearJournal, getJournalState, subscribeJournal } from '../journal';
+import { clearJournal, getJournalState, requestCurrentLocation, subscribeJournal } from '../journal';
 import { getLocaleLabel, resolveSupportedLocale } from '../locale';
 import type { I18nLangsResponse } from '../net/types';
 import {
@@ -128,26 +128,18 @@ export function SettingsView() {
     ? new Date(diagnostics.lastAudioPacketAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'No packets';
 
-  async function requestCurrentLocation() {
-    if (!navigator.geolocation) {
-      setLocationStatus('Location is not available in this webview.');
-      return;
-    }
-
+  async function handleRequestLocation() {
     setLocationStatus('Requesting current location…');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        updateBirdiePreferences({
-          locationLat: position.coords.latitude,
-          locationLon: position.coords.longitude,
-        });
-        setLocationStatus('Saved current location for future BirdNET requests.');
-      },
-      (error) => {
-        setLocationStatus(error.message || 'Location permission was denied or unavailable.');
-      },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
-    );
+    const result = await requestCurrentLocation();
+    if (result.location) {
+      updateBirdiePreferences({
+        locationLat: result.location.lat,
+        locationLon: result.location.lon,
+      });
+      setLocationStatus('Saved current location for future BirdNET requests.');
+    } else {
+      setLocationStatus('Location permission was denied or unavailable.');
+    }
   }
 
   function updateManualLatitude(raw: string) {
@@ -279,7 +271,7 @@ export function SettingsView() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button variant="default" onClick={requestCurrentLocation} className="birdie-quiet-button">
+                <Button variant="default" onClick={handleRequestLocation} className="birdie-quiet-button">
                   Use current location
                 </Button>
                 <Button
