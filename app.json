@@ -4,7 +4,7 @@
 	"edition": "202601",
 	"entrypoint": "index.html",
 	"min_app_version": "2.1.1",
-	"min_sdk_version": "0.0.10",
+	"min_sdk_version": "0.0.11",
 	"name": "Birdie",
 	"package_id": "com.plungarini.birdie",
 	"permissions": [
@@ -27,5 +27,5 @@
 	],
 	"supported_languages": ["en"],
 	"tagline": "Hear a bird? Know it instantly.",
-	"version": "0.5.2"
+	"version": "0.5.3"
 }
